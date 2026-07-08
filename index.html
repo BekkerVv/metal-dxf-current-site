@@ -7,11 +7,11 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar no-print">
     <div>
       <div class="eyebrow">Парк Металл · current site</div>
-      <h1>DXF калькулятор резки</h1>
-      <p>Локальный расчет: DXF, металл, резка, гибка, полимерка, себестоимость, НДС и маржа.</p>
+      <h1>DXF калькулятор заказа</h1>
+      <p>Позиции, расчет, КП, производственный отчет и раскладки в одном проекте.</p>
     </div>
     <div class="top-actions">
       <button id="btnAddManual" class="secondary">+ Ручная позиция</button>
@@ -25,53 +25,19 @@
     </div>
   </header>
 
+  <nav class="workspace-tabs no-print">
+    <button class="nav-tab active" data-view="order">Заказ</button>
+    <button class="nav-tab" data-view="positions">Позиции</button>
+    <button class="nav-tab" data-view="calc">Расчет</button>
+    <button class="nav-tab" data-view="quote">КП</button>
+    <button class="nav-tab" data-view="production">Производство</button>
+    <button class="nav-tab" data-view="layouts">Раскладки</button>
+    <button class="nav-tab" data-view="prices">База цен</button>
+    <button class="nav-tab" data-view="settings">Настройки</button>
+  </nav>
+
   <main class="layout">
-    <section class="panel upload-panel">
-      <div class="dropzone" id="dropzone">
-        <input type="file" id="fileInput" accept=".dxf,.DXF" multiple />
-        <input type="file" id="folderInput" accept=".dxf,.DXF" multiple webkitdirectory directory hidden />
-        <div class="drop-content">
-          <div class="drop-icon">DXF</div>
-          <div>
-            <h2>Загрузи DXF-файлы</h2>
-            <p>Файлы считаются прямо в браузере. Ничего не отправляется в интернет.</p>
-          </div>
-        </div>
-        <div class="drop-actions">
-          <button class="primary" type="button" id="btnSelectFiles">Выбрать DXF</button>
-          <button class="secondary" type="button" id="btnSelectFolder">Папка</button>
-        </div>
-      </div>
-
-      <div class="settings-block">
-        <div class="block-title">Заказ</div>
-        <div class="settings-grid order-grid">
-          <label>Номер заказа<input id="orderNo" placeholder="7130"></label>
-          <label>Клиент<input id="clientName" placeholder="Клиент"></label>
-          <label>Материал по умолчанию<select id="defaultMaterial"></select></label>
-          <label>Толщина по умолчанию, мм<input id="defaultThickness" type="number" step="0.1" value="3"></label>
-          <label>НДС, %<input id="vatRate" type="number" step="1" value="20"></label>
-          <label class="checkline"><input id="pricesIncludeVat" type="checkbox" checked> цены с НДС</label>
-        </div>
-      </div>
-
-      <div class="settings-block compact">
-        <div class="block-title">Коэффициенты и проверка</div>
-        <div class="settings-grid verify-grid">
-          <label>Коэф. металла<input id="metalFactor" type="number" step="0.01" value="1.2"></label>
-          <label>Коэф. резки<input id="cutFactor" type="number" step="0.01" value="2"></label>
-          <label>Врезка, ₽/шт<input id="piercePrice" type="number" step="0.01" value="5"></label>
-          <label>Мин. резки, ₽/позиция<input id="minCut" type="number" step="1" value="2000"></label>
-          <label>Коэф. гибки<input id="bendFactor" type="number" step="0.01" value="1"></label>
-          <label>Коэф. покраски<input id="paintFactor" type="number" step="0.01" value="1"></label>
-          <label class="checkline"><input id="addThicknessToBlank" type="checkbox" checked> +толщина к габариту металла</label>
-          <label>Не считать слои со словами<input id="ignoreLayers" value="DIM,TEXT,РАЗМ,ОСЬ,AXIS,FRAME,ШТАМП"></label>
-        </div>
-        <div class="hint">Металл считается предварительно по габариту. Размеры, тексты, штампы, DIMENSION, HATCH и INSERT не считаются.</div>
-      </div>
-    </section>
-
-    <section class="summary cards">
+    <section class="summary cards no-print">
       <div class="card"><strong id="sumFiles">0</strong><span>позиций</span></div>
       <div class="card"><strong id="sumQty">0</strong><span>деталей</span></div>
       <div class="card"><strong id="sumCut">0 м</strong><span>реза</span></div>
@@ -81,114 +47,227 @@
       <div class="card margin"><strong id="sumMargin">0 ₽</strong><span>маржа / %</span></div>
     </section>
 
-    <section class="panel price-panel">
-      <div class="panel-title">
-        <div>
-          <h2>База цен</h2>
-          <span>Редактируй цены здесь. Они сохраняются в браузере.</span>
+    <section class="view active" id="view-order">
+      <section class="panel upload-panel">
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept=".dxf,.DXF" multiple />
+          <input type="file" id="folderInput" accept=".dxf,.DXF" multiple webkitdirectory directory hidden />
+          <div class="drop-content">
+            <div class="drop-icon">DXF</div>
+            <div>
+              <h2>Загрузи DXF-файлы</h2>
+              <p>Файлы считаются прямо в браузере. Ничего не отправляется в интернет.</p>
+            </div>
+          </div>
+          <div class="drop-actions">
+            <button class="primary" type="button" id="btnSelectFiles">Выбрать DXF</button>
+            <button class="secondary" type="button" id="btnSelectFolder">Папка</button>
+          </div>
         </div>
-        <div class="mini-actions">
-          <button id="btnResetPrices" class="secondary small">Сброс цен</button>
-          <button id="btnExportPrices" class="secondary small">Экспорт цен</button>
-          <button id="btnImportPrices" class="secondary small">Импорт цен</button>
-          <input id="priceFileInput" type="file" accept=".json,application/json" hidden>
+
+        <div class="settings-block">
+          <div class="block-title">Карточка заказа</div>
+          <div class="settings-grid order-grid">
+            <label>Номер заказа<input id="orderNo" placeholder="7130"></label>
+            <label>Клиент<input id="clientName" placeholder="Клиент"></label>
+            <label>Материал по умолчанию<select id="defaultMaterial"></select></label>
+            <label>Толщина по умолчанию, мм<input id="defaultThickness" type="number" step="0.1" value="3"></label>
+            <label>НДС, %<input id="vatRate" type="number" step="1" value="20"></label>
+            <label class="checkline"><input id="pricesIncludeVat" type="checkbox" checked> цены с НДС</label>
+          </div>
         </div>
-      </div>
-
-      <div class="price-tabs" role="tablist">
-        <button class="tab active" data-tab="metal">Металл</button>
-        <button class="tab" data-tab="cut">Резка</button>
-        <button class="tab" data-tab="bend">Гибка</button>
-        <button class="tab" data-tab="paint">Покраска</button>
-      </div>
-
-      <div class="price-tab-content active" id="tab-metal">
-        <div class="price-toolbar">
-          <span>Материал и цена закупки/расчета, ₽/кг. Продажа = цена × коэф. металла.</span>
-          <button id="btnAddMaterial" class="secondary small">+ материал</button>
-        </div>
-        <div id="metalPriceEditor" class="price-editor"></div>
-      </div>
-
-      <div class="price-tab-content" id="tab-cut">
-        <div class="price-toolbar">
-          <span>Цена резки по толщине, ₽/м. Итог = ₽/м × длина × коэф. резки + врезки.</span>
-          <button id="btnAddCutThickness" class="secondary small">+ толщина</button>
-        </div>
-        <div id="cutPriceEditor" class="price-editor"></div>
-      </div>
-
-      <div class="price-tab-content" id="tab-bend">
-        <div class="price-toolbar">
-          <span>Цена гибки по толщине, ₽/м гиба. Итог = количество гибов × длина × ₽/м × коэф.</span>
-          <button id="btnAddBendThickness" class="secondary small">+ толщина</button>
-        </div>
-        <div id="bendPriceEditor" class="price-editor"></div>
-      </div>
-
-      <div class="price-tab-content" id="tab-paint">
-        <div class="settings-grid paint-grid">
-          <label>Полимерка продажа, ₽/м²<input id="paintPriceM2" type="number" step="1"></label>
-          <label>Себест. покраски, ₽/м²<input id="paintCostM2" type="number" step="1"></label>
-          <label>Расход порошка, кг/м²<input id="powderConsumption" type="number" step="0.01"></label>
-          <label>Порошок, ₽/кг<input id="powderPrice" type="number" step="1"></label>
-          <label>Мин. покраски, ₽<input id="minPaint" type="number" step="1"></label>
-          <label>Целевая маржа, %<input id="targetMargin" type="number" step="1"></label>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel table-panel">
-      <div class="panel-title">
-        <div>
-          <h2>Позиции расчета</h2>
-          <span>Клик по строке — редактирование и превью</span>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table id="itemsTable">
-          <thead>
-            <tr>
-              <th>Деталь</th><th>Кол-во</th><th>Мат.</th><th>t</th><th>Габарит</th><th>Рез</th><th>Врезки</th><th>Вес</th><th>Металл</th><th>Резка</th><th>Гибка</th><th>Покраска</th><th>Итого</th><th>Статус</th>
-            </tr>
-          </thead>
-          <tbody id="itemsBody"><tr class="empty-row"><td colspan="14">Файлы пока не загружены.</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="split main-split">
-      <section class="panel preview-panel">
-        <div class="panel-title"><h2>Превью</h2><span id="previewTitle">Нет выбранной детали</span></div>
-        <div id="previewBox" class="preview-box"><div class="preview-empty">Выбери строку в таблице.</div></div>
-      </section>
-
-      <section class="panel edit-panel">
-        <div class="panel-title"><h2>Редактор позиции</h2><span id="editTitle">нет выбранной</span></div>
-        <div id="editBox" class="edit-box muted-box">Выбери позицию в таблице.</div>
       </section>
     </section>
 
-    <section class="split service-split">
-      <section class="panel service-panel">
-        <div class="panel-title"><h2>Дополнительные строки</h2><button id="btnAddService" class="secondary small">+ строка</button></div>
-        <div class="table-wrap mini-table-wrap">
-          <table class="mini-table">
-            <thead><tr><th>Наименование</th><th>Себестоимость</th><th>Продажа</th><th></th></tr></thead>
-            <tbody id="servicesBody"><tr class="empty-row"><td colspan="4">Нет дополнительных строк.</td></tr></tbody>
+    <section class="view" id="view-positions">
+      <section class="panel table-panel">
+        <div class="panel-title">
+          <div>
+            <h2>Позиции заказа</h2>
+            <span>Одна деталь = одна строка. Клик по строке — редактор и превью.</span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="itemsTable">
+            <thead>
+              <tr>
+                <th>Деталь</th><th>Кол-во</th><th>Мат.</th><th>t</th><th>Габарит</th><th>Рез</th><th>Врезки</th><th>Вес</th><th>Металл</th><th>Резка</th><th>Гибка</th><th>Покраска</th><th>Сварка</th><th>Итого</th><th>Статус</th>
+              </tr>
+            </thead>
+            <tbody id="itemsBody"><tr class="empty-row"><td colspan="15">Файлы пока не загружены.</td></tr></tbody>
           </table>
         </div>
       </section>
 
-      <section class="panel log-panel">
-        <div class="panel-title"><h2>Проверка</h2><span>замечания по выбранной детали</span></div>
-        <div id="logBox" class="log-box">Нет данных.</div>
+      <section class="split main-split">
+        <section class="panel preview-panel">
+          <div class="panel-title"><h2>Превью</h2><span id="previewTitle">Нет выбранной детали</span></div>
+          <div id="previewBox" class="preview-box"><div class="preview-empty">Выбери строку в таблице.</div></div>
+        </section>
+
+        <section class="panel edit-panel">
+          <div class="panel-title"><h2>Редактор позиции</h2><span id="editTitle">нет выбранной</span></div>
+          <div id="editBox" class="edit-box muted-box">Выбери позицию в таблице.</div>
+        </section>
+      </section>
+
+      <section class="split service-split">
+        <section class="panel service-panel">
+          <div class="panel-title"><h2>Дополнительные строки заказа</h2><button id="btnAddService" class="secondary small">+ строка</button></div>
+          <div class="hint">Для минималки, доставки, упаковки и работ, которые нужно добавить к заказу отдельно. В КП идут отдельной строкой только эти доп. строки.</div>
+          <div class="table-wrap mini-table-wrap">
+            <table class="mini-table">
+              <thead><tr><th>Наименование</th><th>Себестоимость</th><th>Продажа</th><th></th></tr></thead>
+              <tbody id="servicesBody"><tr class="empty-row"><td colspan="4">Нет дополнительных строк.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel log-panel">
+          <div class="panel-title"><h2>Проверка DXF</h2><span>замечания по выбранной детали</span></div>
+          <div id="logBox" class="log-box">Нет данных.</div>
+        </section>
+      </section>
+    </section>
+
+    <section class="view" id="view-calc">
+      <section class="panel table-panel">
+        <div class="panel-title"><h2>Расчет по позициям</h2><span>Услуги входят в цену детали.</span></div>
+        <div id="calcDetails" class="calc-details"></div>
+      </section>
+    </section>
+
+    <section class="view" id="view-quote">
+      <section class="panel quote-panel printable" id="quotePrintArea">
+        <div class="print-head">
+          <div>
+            <div class="eyebrow">Коммерческое предложение</div>
+            <h2 id="quoteTitle">КП</h2>
+            <div id="quoteMeta" class="print-meta"></div>
+          </div>
+          <div class="print-actions no-print">
+            <button id="btnPrintQuote" class="primary small">Печать / PDF КП</button>
+          </div>
+        </div>
+        <div class="table-wrap print-table-wrap">
+          <table class="quote-table">
+            <thead><tr><th>№</th><th>Наименование</th><th>Толщина</th><th>Материал</th><th>Кол-во</th><th>Ед.</th><th>Цена</th><th>Сумма</th></tr></thead>
+            <tbody id="quoteBody"><tr class="empty-row"><td colspan="8">Нет позиций.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="totals-box">
+          <div><span>Итого без НДС</span><strong id="quoteTotalNoVat">0 ₽</strong></div>
+          <div><span>НДС</span><strong id="quoteVat">0 ₽</strong></div>
+          <div class="grand"><span>Итого с НДС</span><strong id="quoteTotal">0 ₽</strong></div>
+        </div>
+        <div class="quote-note">Срок и условия оплаты заполняются менеджером. Цены указаны по текущей базе расчета проекта.</div>
+      </section>
+    </section>
+
+    <section class="view" id="view-production">
+      <section class="panel production-panel printable" id="productionPrintArea">
+        <div class="print-head">
+          <div>
+            <div class="eyebrow">Производственный отчет</div>
+            <h2 id="productionTitle">Список в производство</h2>
+            <div id="productionMeta" class="print-meta"></div>
+          </div>
+          <div class="print-actions no-print">
+            <button id="btnPrintProduction" class="primary small">Печать / PDF отчета</button>
+          </div>
+        </div>
+        <div class="table-wrap production-table-wrap">
+          <table class="production-table">
+            <thead><tr><th>Превью</th><th>Наименование</th><th>Кол-во</th><th>t</th><th>Материал</th><th>Резка</th><th>Гибка</th><th>Полимерка</th><th>RAL / текстура</th><th>Сварка</th><th>Доп.</th><th>Примечание</th></tr></thead>
+            <tbody id="productionBody"><tr class="empty-row"><td colspan="12">Нет позиций.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="view-layouts">
+      <section class="panel layout-panel">
+        <div class="panel-title">
+          <div><h2>Раскладки</h2><span>Пока основной режим — загрузка JPEG/PNG превью раскладки. Данные листа можно поправить вручную.</span></div>
+          <div class="mini-actions">
+            <button id="btnAddLayout" class="primary small">+ JPEG/PNG раскладка</button>
+            <input id="layoutFileInput" type="file" accept="image/png,image/jpeg,image/jpg,.png,.jpg,.jpeg" multiple hidden>
+          </div>
+        </div>
+        <div id="layoutsBody" class="layout-cards"><div class="empty-card">Раскладки пока не добавлены.</div></div>
+      </section>
+    </section>
+
+    <section class="view" id="view-prices">
+      <section class="panel price-panel">
+        <div class="panel-title">
+          <div>
+            <h2>База цен</h2>
+            <span>Редактируется редко. Сохраняется в браузере и внутри проекта.</span>
+          </div>
+          <div class="mini-actions">
+            <button id="btnResetPrices" class="secondary small">Сброс цен</button>
+            <button id="btnExportPrices" class="secondary small">Экспорт цен</button>
+            <button id="btnImportPrices" class="secondary small">Импорт цен</button>
+            <input id="priceFileInput" type="file" accept=".json,application/json" hidden>
+          </div>
+        </div>
+
+        <div class="price-tabs" role="tablist">
+          <button class="price-tab active" data-tab="metal">Металл</button>
+          <button class="price-tab" data-tab="cut">Резка</button>
+          <button class="price-tab" data-tab="bend">Гибка</button>
+          <button class="price-tab" data-tab="paint">Покраска</button>
+        </div>
+
+        <div class="price-tab-content active" id="tab-metal">
+          <div class="price-toolbar"><span>Материал и цена, ₽/кг. Продажа = цена × коэф. металла.</span><button id="btnAddMaterial" class="secondary small">+ материал</button></div>
+          <div id="metalPriceEditor" class="price-editor"></div>
+        </div>
+
+        <div class="price-tab-content" id="tab-cut">
+          <div class="price-toolbar"><span>Цена резки по толщине, ₽/м. Минималка выключена, добавляй вручную в доп. строках.</span><button id="btnAddCutThickness" class="secondary small">+ толщина</button></div>
+          <div id="cutPriceEditor" class="price-editor"></div>
+        </div>
+
+        <div class="price-tab-content" id="tab-bend">
+          <div class="price-toolbar"><span>Цена гибки по толщине, ₽/м гиба.</span><button id="btnAddBendThickness" class="secondary small">+ толщина</button></div>
+          <div id="bendPriceEditor" class="price-editor"></div>
+        </div>
+
+        <div class="price-tab-content" id="tab-paint">
+          <div class="settings-grid paint-grid">
+            <label>Полимерка продажа, ₽/м²<input id="paintPriceM2" type="number" step="1"></label>
+            <label>Себест. покраски, ₽/м²<input id="paintCostM2" type="number" step="1"></label>
+            <label>Расход порошка, кг/м²<input id="powderConsumption" type="number" step="0.01"></label>
+            <label>Порошок, ₽/кг<input id="powderPrice" type="number" step="1"></label>
+            <label>Мин. покраски, ₽<input id="minPaint" type="number" step="1"></label>
+            <label>Целевая маржа, %<input id="targetMargin" type="number" step="1" value="0"></label>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="view-settings">
+      <section class="panel settings-panel">
+        <div class="panel-title"><h2>Настройки расчета</h2><span>Сюда убрано то, что редко трогаешь.</span></div>
+        <div class="settings-grid verify-grid">
+          <label>Коэф. металла<input id="metalFactor" type="number" step="0.01" value="1.2"></label>
+          <label>Коэф. резки<input id="cutFactor" type="number" step="0.01" value="2"></label>
+          <label>Врезка, ₽/шт<input id="piercePrice" type="number" step="0.01" value="5"></label>
+          <label class="hidden-setting">Мин. резки, ₽/позиция<input id="minCut" type="number" step="1" value="0"></label>
+          <label>Коэф. гибки<input id="bendFactor" type="number" step="0.01" value="1"></label>
+          <label>Коэф. покраски<input id="paintFactor" type="number" step="0.01" value="1"></label>
+          <label class="checkline"><input id="addThicknessToBlank" type="checkbox" checked> +толщина к габариту металла</label>
+          <label>Не считать слои со словами<input id="ignoreLayers" value="DIM,TEXT,РАЗМ,ОСЬ,AXIS,FRAME,ШТАМП"></label>
+        </div>
+        <div class="hint">Минималка резки по договоренности выключена. Если нужно добить заказ до минимума — добавь отдельную строку в “Дополнительные строки заказа”.</div>
       </section>
     </section>
   </main>
 
-  <footer>
-    <span>v0.3 current site</span>
+  <footer class="no-print">
+    <span>v0.4 current site</span>
     <span>Локальная работа: файлы не отправляются в интернет.</span>
   </footer>
 
