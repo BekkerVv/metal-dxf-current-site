@@ -11,7 +11,7 @@
     <div>
       <div class="eyebrow">Парк Металл · current site</div>
       <h1>DXF калькулятор заказа</h1>
-      <p>Позиции, расчет, КП, производственный отчет и раскладки в одном проекте.</p>
+      <p>Редактируемые позиции, финальный расчет, КП, производство и раскладки в одном проекте.</p>
     </div>
     <div class="top-actions">
       <button id="btnAddManual" class="secondary">+ Ручная позиция</button>
@@ -84,22 +84,46 @@
         <div class="panel-title">
           <div>
             <h2>Позиции заказа</h2>
-            <span>Одна деталь = одна строка. Клик по строке — редактор и превью.</span>
+            <span>Редактируй прямо в таблице. Маленькое превью в каждой строке.</span>
           </div>
         </div>
-        <div class="table-wrap">
-          <table id="itemsTable">
+        <div class="bulk-toolbar no-print">
+          <span>Быстрое заполнение:</span>
+          <select id="bulkField">
+            <option value="material">Материал</option>
+            <option value="thickness">Толщина</option>
+            <option value="qty">Количество</option>
+            <option value="cut">Резка да/нет</option>
+            <option value="bends">Кол-во гибов</option>
+            <option value="bendLengthMm">Длина гиба</option>
+            <option value="paintLayers">Полимерка слоев</option>
+            <option value="ral">RAL</option>
+            <option value="paintTexture">Текстура</option>
+            <option value="weldPriceOne">Сварка ₽/шт</option>
+            <option value="serviceText">Доп. услуга</option>
+            <option value="productionNote">Примечание</option>
+            <option value="metalFactor">Коэф. металла</option>
+            <option value="cutFactor">Коэф. резки</option>
+            <option value="bendFactor">Коэф. гибки</option>
+            <option value="paintFactor">Коэф. полимерки</option>
+          </select>
+          <input id="bulkValue" placeholder="значение">
+          <button id="btnBulkApply" class="secondary small" type="button">К выбранным</button>
+          <button id="btnBulkDown" class="secondary small" type="button">От строки вниз</button>
+        </div>
+        <div class="table-wrap positions-wrap">
+          <table id="itemsTable" class="positions-table">
             <thead>
               <tr>
-                <th>Деталь</th><th>Кол-во</th><th>Мат.</th><th>t</th><th>Габарит</th><th>Рез</th><th>Врезки</th><th>Вес</th><th>Металл</th><th>Резка</th><th>Гибка</th><th>Покраска</th><th>Сварка</th><th>Итого</th><th>Статус</th>
+                <th>✓</th><th>Превью</th><th>Деталь</th><th>Кол-во</th><th>Мат.</th><th>t</th><th>Габарит</th><th>Рез</th><th>Гибы</th><th>Дл. гиба</th><th>Полим.</th><th>RAL</th><th>Текстура</th><th>Сварка ₽/шт</th><th>Доп.</th><th>Прим.</th><th>Итого</th><th>Статус</th>
               </tr>
             </thead>
-            <tbody id="itemsBody"><tr class="empty-row"><td colspan="15">Файлы пока не загружены.</td></tr></tbody>
+            <tbody id="itemsBody"><tr class="empty-row"><td colspan="18">Файлы пока не загружены.</td></tr></tbody>
           </table>
         </div>
       </section>
 
-      <section class="split main-split">
+      <section class="split main-split hidden-preview-editor">
         <section class="panel preview-panel">
           <div class="panel-title"><h2>Превью</h2><span id="previewTitle">Нет выбранной детали</span></div>
           <div id="previewBox" class="preview-box"><div class="preview-empty">Выбери строку в таблице.</div></div>
@@ -107,7 +131,7 @@
 
         <section class="panel edit-panel">
           <div class="panel-title"><h2>Редактор позиции</h2><span id="editTitle">нет выбранной</span></div>
-          <div id="editBox" class="edit-box muted-box">Выбери позицию в таблице.</div>
+          <div id="editBox" class="edit-box muted-box">Основное редактирование перенесено в таблицу позиций.</div>
         </section>
       </section>
 
@@ -132,7 +156,7 @@
 
     <section class="view" id="view-calc">
       <section class="panel table-panel">
-        <div class="panel-title"><h2>Расчет по позициям</h2><span>Услуги входят в цену детали.</span></div>
+        <div class="panel-title"><h2>Расчет по позициям</h2><span>Коэффициенты и фактическая себестоимость редактируются здесь. Итоги идут под колонками.</span></div>
         <div id="calcDetails" class="calc-details"></div>
       </section>
     </section>
@@ -267,7 +291,7 @@
   </main>
 
   <footer class="no-print">
-    <span>v0.4 current site</span>
+    <span>v0.5 current site</span>
     <span>Локальная работа: файлы не отправляются в интернет.</span>
   </footer>
 

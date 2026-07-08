@@ -141,3 +141,35 @@ footer { padding: 18px 28px; display: flex; justify-content: space-between; colo
   .prod-preview { width: 70px; height: 48px; }
   .prod-preview svg { width: 64px; height: 42px; }
 }
+
+/* v0.5: рабочая таблица позиций и финальный расчет */
+.bulk-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0 12px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: #f8fafc; }
+.bulk-toolbar span { color: var(--muted); font-weight: 800; font-size: 13px; }
+.bulk-toolbar select { width: 190px; }
+.bulk-toolbar input { width: 220px; }
+.hidden-preview-editor { display: none !important; }
+.positions-wrap { max-height: calc(100vh - 280px); }
+.positions-table { min-width: 1960px; }
+.positions-table th { position: sticky; top: 0; z-index: 2; }
+.positions-table td { padding: 6px 8px; vertical-align: middle; }
+.select-cell { width: 36px; text-align: center; }
+.select-cell input { width: auto; }
+.small-preview { width: 92px; padding: 4px !important; }
+.small-preview svg { width: 82px; height: 52px; display: block; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
+.name-cell { min-width: 290px; max-width: 360px; }
+.cell-input { border-radius: 8px; padding: 6px 7px; font-size: 13px; min-height: 32px; }
+.name-input { min-width: 260px; font-weight: 800; }
+.material-select { min-width: 110px; }
+.tiny { width: 72px; min-width: 72px; }
+.small-num { width: 92px; min-width: 92px; }
+.ral-input { width: 115px; min-width: 115px; }
+.service-input { width: 150px; min-width: 150px; }
+.note-input { width: 180px; min-width: 180px; }
+.nowrap { white-space: nowrap; }
+.calc-table { min-width: 2250px; }
+.calc-table th { position: sticky; top: 0; z-index: 2; }
+.calc-table td, .calc-table th { padding: 6px 8px; vertical-align: middle; }
+.calc-table tfoot th { position: sticky; bottom: 0; background: #eef6ff; border-top: 2px solid #bfdbfe; z-index: 3; }
+.calc-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.calc-input { width: 84px; min-width: 84px; padding: 6px 7px; font-size: 13px; border-radius: 8px; }
+@media print { .bulk-toolbar { display: none !important; } }
