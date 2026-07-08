@@ -7,20 +7,45 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div id="menuBackdrop" class="menu-backdrop no-print"></div>
+  <aside id="sideMenu" class="side-menu no-print">
+    <div class="side-head">
+      <b>Меню проекта</b>
+      <button id="btnMenuClose" class="tool-btn">×</button>
+    </div>
+    <button id="btnMenuOpenProject" class="menu-action">Открыть проект</button>
+    <button id="btnMenuSaveProject" class="menu-action">Сохранить проект</button>
+    <div class="side-section">
+      <h3>Недавние проекты</h3>
+      <div id="recentProjects" class="recent-list"></div>
+    </div>
+    <div class="side-section">
+      <h3>Визуальные настройки</h3>
+      <label>Тема<select id="themeSelect"><option value="light">Светлая</option><option value="dark">Темная</option></select></label>
+      <label>Акцент<input id="accentColor" type="color" value="#1d4ed8"></label>
+      <label>Размер превью<input id="previewSize" type="range" min="40" max="120" value="72"></label>
+      <label class="checkline"><input id="showHints" type="checkbox" checked> показывать подсказки</label>
+    </div>
+    <div class="side-section">
+      <h3>Программные настройки</h3>
+      <div class="menu-hint">Игнорируемые слои, НДС, цены с НДС и настройки расчетов находятся во вкладке “Настройки”.</div>
+    </div>
+  </aside>
+
   <header class="topbar no-print">
-    <div>
+    <button id="btnMenu" class="burger" title="Меню">☰</button>
+    <div class="brand-block">
       <div class="eyebrow">Парк Металл · current site</div>
       <h1>DXF калькулятор заказа</h1>
-      <p>Редактируемые позиции, финальный расчет, КП, производство и раскладки в одном проекте.</p>
     </div>
     <div class="top-actions">
-      <button id="btnAddManual" class="secondary">+ Ручная позиция</button>
-      <button id="btnMergeDuplicates" class="secondary" disabled>Объединить дубли</button>
-      <button id="btnSaveProject" class="secondary" disabled>Сохранить проект</button>
-      <button id="btnLoadProject" class="secondary">Загрузить проект</button>
-      <button id="btnExportCsv" class="secondary" disabled>CSV</button>
+      <button id="btnSaveProject" class="secondary" disabled>Сохранить</button>
+      <button id="btnLoadProject" class="secondary">Загрузить</button>
       <button id="btnCopyQuote" class="primary" disabled>Скопировать КП</button>
       <button id="btnClear" class="danger" disabled>Очистить</button>
+      <button id="btnAddManual" class="hidden-control">+ Ручная позиция</button>
+      <button id="btnMergeDuplicates" class="hidden-control" disabled>Объединить дубли</button>
+      <button id="btnExportCsv" class="hidden-control" disabled>CSV</button>
       <input id="projectFileInput" type="file" accept=".json,application/json" hidden>
     </div>
   </header>
@@ -291,9 +316,18 @@
   </main>
 
   <footer class="no-print">
-    <span>v0.5 current site</span>
+    <span>v0.6 current site</span>
     <span>Локальная работа: файлы не отправляются в интернет.</span>
   </footer>
+
+
+  <div id="zoomModal" class="zoom-modal no-print">
+    <div class="zoom-panel">
+      <div class="zoom-head"><b id="zoomTitle">Превью</b><button id="btnZoomClose" class="tool-btn">×</button></div>
+      <input id="zoomRange" type="range" min="50" max="300" value="100">
+      <div class="zoom-scroll"><img id="zoomImage" alt="preview"></div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
