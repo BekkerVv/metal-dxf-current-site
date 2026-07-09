@@ -1,11 +1,11 @@
 'use strict';
 
-const VERSION = '1.1';
-const STORAGE_KEY = 'pm_dxf_calc_current_site_v11_settings';
-const PRICE_KEY = 'pm_dxf_calc_current_site_v11_prices';
-const PROJECT_KEY = 'pm_dxf_calc_current_site_v11_autosave';
+const VERSION = '1.2';
+const STORAGE_KEY = 'pm_dxf_calc_current_site_v12_settings';
+const PRICE_KEY = 'pm_dxf_calc_current_site_v12_prices';
+const PROJECT_KEY = 'pm_dxf_calc_current_site_v12_autosave';
 
-const state = { items: [], services: [], layouts: [], orderCost: { material: 'гк ст3', widthMm: 1250, lengthMm: 2500, thicknessMm: 3, sheets: 1, priceKg: 63.2, extraCost: 0 }, selectedId: null, nextId: 1, nextServiceId: 1, nextLayoutId: 1 };
+const state = { items: [], services: [], layouts: [], orderCost: { material: 'гк ст3', widthMm: 1250, lengthMm: 2500, thicknessMm: 3, sheets: 0, priceKg: 63.2, extraCost: 0 }, selectedId: null, nextId: 1, nextServiceId: 1, nextLayoutId: 1 };
 let fillDrag = null;
 let positionSort = { field: '', dir: 'asc' };
 let positionFilters = {};
@@ -52,9 +52,9 @@ const els = {
   btnAddManual: $('btnAddManual'), btnAddManualPositions: $('btnAddManualPositions'), btnMergeDuplicates: $('btnMergeDuplicates'), btnSaveProject: $('btnSaveProject'),
   btnLoadProject: $('btnLoadProject'), btnExportCsv: $('btnExportCsv'), btnCopyQuote: $('btnCopyQuote'), btnClear: $('btnClear'),
   btnAddService: $('btnAddService'), btnResetPrices: $('btnResetPrices'), btnExportPrices: $('btnExportPrices'), btnImportPrices: $('btnImportPrices'),
-  btnAddMaterial: $('btnAddMaterial'), btnAddCutThickness: $('btnAddCutThickness'), btnAddBendThickness: $('btnAddBendThickness'),
-  metalPriceEditor: $('metalPriceEditor'), cutPriceEditor: $('cutPriceEditor'), bendPriceEditor: $('bendPriceEditor'),
-  itemsTable: $('itemsTable'), itemsBody: $('itemsBody'), servicesBody: $('servicesBody'), previewBox: $('previewBox'), previewTitle: $('previewTitle'),
+  btnAddMaterial: $('btnAddMaterial'), btnAddSheetPrice: $('btnAddSheetPrice'), btnAddCutThickness: $('btnAddCutThickness'), btnAddBendThickness: $('btnAddBendThickness'),
+  metalPriceEditor: $('metalPriceEditor'), sheetPriceEditor: $('sheetPriceEditor'), cutPriceEditor: $('cutPriceEditor'), bendPriceEditor: $('bendPriceEditor'),
+  itemsTable: $('itemsTable'), itemsBody: $('itemsBody'), geometryEditor: $('geometryEditor'), servicesBody: $('servicesBody'), previewBox: $('previewBox'), previewTitle: $('previewTitle'),
   editBox: $('editBox'), editTitle: $('editTitle'), logBox: $('logBox'),
   sumFiles: $('sumFiles'), sumQty: $('sumQty'), sumCut: $('sumCut'), sumWeight: $('sumWeight'), sumCost: $('sumCost'), sumTotal: $('sumTotal'), sumMargin: $('sumMargin'),
   orderNo: $('orderNo'), clientName: $('clientName'), defaultMaterial: $('defaultMaterial'), defaultThickness: $('defaultThickness'),
@@ -429,29 +429,36 @@ function calcOrderCost(){
   const widthMm = Math.max(0, num(oc.widthMm, 0));
   const lengthMm = Math.max(0, num(oc.lengthMm, 0));
   const thicknessMm = Math.max(0, num(oc.thicknessMm, 0));
-  const sheets = Math.max(0, num(oc.sheets, 1));
+  const sheets = Math.max(0, num(oc.sheets, 0));
   const basePriceKg = exactMaterialPrice(rec, thicknessMm, widthMm, lengthMm, 0);
   const priceKg = basePriceKg;
   let priceIssue = '';
   if (!rec) priceIssue = `Материал «${material}» отсутствует в базе цен.`;
-  else if (thicknessMm > 0 && !materialPriceExists(rec, thicknessMm, widthMm, lengthMm)) {
+  else if (thicknessMm > 0 && widthMm > 0 && lengthMm > 0 && !materialPriceExists(rec, thicknessMm, widthMm, lengthMm)) {
     const entries = sheetPriceEntries(rec, thicknessMm).map(e => e.size || `${e.width}х${e.length}`).filter(Boolean).join(', ');
     priceIssue = entries ? `Нет цены металла ${rec.name} ${thicknessKey(thicknessMm)} мм для раскроя ${fmtNumber(widthMm,0)}х${fmtNumber(lengthMm,0)}. В прайсе есть: ${entries}.` : `Нет цены металла ${rec.name} ${thicknessKey(thicknessMm)} мм в базе цен.`;
   }
-  const metalKg = widthMm * lengthMm * thicknessMm / 1_000_000_000 * density * sheets;
-  const metalCost = metalKg * priceKg;
+  const metalCostKnown = sheets > 0 && widthMm > 0 && lengthMm > 0 && thicknessMm > 0 && priceKg > 0 && !priceIssue;
+  const metalKg = metalCostKnown ? widthMm * lengthMm * thicknessMm / 1_000_000_000 * density * sheets : 0;
+  const metalCost = metalCostKnown ? metalKg * priceKg : 0;
   const extraCost = Math.max(0, num(oc.extraCost, 0));
-  return { material, density, widthMm, lengthMm, thicknessMm, sheets, priceKg, basePriceKg, priceIssue, metalKg, metalCost, extraCost, cost: metalCost + extraCost };
+  const costKnown = metalCostKnown || extraCost > 0;
+  return { material, density, widthMm, lengthMm, thicknessMm, sheets, priceKg, basePriceKg, priceIssue, metalKg, metalCost, extraCost, metalCostKnown, costKnown, cost: metalCost + extraCost };
 }
-function calcTotals(){ const s=getSettings(); const items=state.items.reduce((acc,item)=>{ const c=calcItem(item); acc.qty+=c.qty; acc.cut+=c.cutMTotal; acc.weight+=c.weightTotal; acc.sale+=c.sale; return acc; },{qty:0,cut:0,weight:0,sale:0}); const svc=calcServices(); const oc=calcOrderCost(); const saleRaw=items.sale+svc.sale, cost=oc.cost+svc.cost, saleNoVat=saleToNoVat(saleRaw,s), saleWithVat=saleToWithVat(saleRaw,s), vat=Math.max(0,saleWithVat-saleNoVat), costKnown=cost>0, margin=costKnown?saleNoVat-cost:0, marginPct=(costKnown&&saleNoVat>0)?margin/saleNoVat*100:null; return {...items,serviceSale:svc.sale,serviceCost:svc.cost,orderMetalCost:oc.metalCost,orderExtraCost:oc.extraCost,orderMetalKg:oc.metalKg,saleRaw,saleNoVat,saleWithVat,vat,cost,costKnown,margin,marginPct}; }
+function calcTotals(){ const s=getSettings(); const items=state.items.reduce((acc,item)=>{ const c=calcItem(item); acc.qty+=c.qty; acc.cut+=c.cutMTotal; acc.weight+=c.weightTotal; acc.sale+=c.sale; return acc; },{qty:0,cut:0,weight:0,sale:0}); const svc=calcServices(); const oc=calcOrderCost(); const saleRaw=items.sale+svc.sale, cost=oc.cost+svc.cost, saleNoVat=saleToNoVat(saleRaw,s), saleWithVat=saleToWithVat(saleRaw,s), vat=Math.max(0,saleWithVat-saleNoVat), costKnown=oc.costKnown||svc.cost>0, margin=costKnown?saleNoVat-cost:0, marginPct=(costKnown&&saleNoVat>0)?margin/saleNoVat*100:null; return {...items,serviceSale:svc.sale,serviceCost:svc.cost,orderMetalCost:oc.metalCost,orderExtraCost:oc.extraCost,orderMetalKg:oc.metalKg,saleRaw,saleNoVat,saleWithVat,vat,cost,costKnown,margin,marginPct}; }
 
 async function handleFiles(files){ const list=[...files].filter(f=>f.name.toLowerCase().endsWith('.dxf')); if(!list.length)return; for(const file of list){ try{ const text=await file.text(); const meta=parseFilename(file.name); const parsed=parseDxf(text); const item=makeItem({source:'dxf',fileName:file.webkitRelativePath||file.name,name:meta.name,qty:meta.qty,thickness:meta.thickness,rawEntities:parsed.entities,rawWarnings:parsed.warnings}); item.rawSize=file.size; state.items.push(item); } catch(err){ const item=makeItem({source:'manual',fileName:file.name,name:file.name,qty:1}); item.warnings.push(`Ошибка чтения DXF: ${err.message||err}`); state.items.push(item); } } detectDuplicates(); if(!state.selectedId&&state.items.length)state.selectedId=state.items[0].id; renderAll(); autosaveProject(); }
 function detectDuplicates(){ for(const item of state.items)item.duplicateKey=''; const map=new Map(); for(const item of state.items){ const g=getGeometry(item); const key=`${round(g.width,1)}x${round(g.height,1)}|${round(g.cutLengthMm,1)}|${round(g.pierces,0)}|${item.thickness}|${item.material}`; item.duplicateKey=key; if(!map.has(key))map.set(key,[]); map.get(key).push(item); } for(const group of map.values()){ if(group.length>1){ const names=group.map(g=>g.name).join(', '); for(const item of group){ const msg=`Похожа на другие детали: ${names}. Можно объединить количество, если геометрия совпадает.`; if(!item.warnings.includes(msg))item.warnings.push(msg); } } } }
 function mergeDuplicates(){ detectDuplicates(); const groups=new Map(); for(const item of state.items){ if(!groups.has(item.duplicateKey))groups.set(item.duplicateKey,[]); groups.get(item.duplicateKey).push(item); } const merged=[]; let mergedCount=0; for(const group of groups.values()){ const first=group[0]; if(group.length>1){ first.qty=group.reduce((a,x)=>a+num(x.qty,0),0); first.name=`${first.name} / объединено ${group.length} поз.`; first.note=`${first.note||''}\nОбъединено: ${group.map(x=>x.fileName||x.name).join('; ')}`.trim(); first.warnings=first.warnings.filter(w=>!w.startsWith('Похожа на другие детали')); mergedCount+=group.length-1; } merged.push(first); } state.items=merged; if(mergedCount)alert(`Объединено дублей: ${mergedCount}`); renderAll(); autosaveProject(); }
 
-function renderAll(){ renderMaterialSelects(); renderPriceEditors(); renderTable(); renderSummary(); renderLog(); renderServices(); renderQuote(); renderProduction(); renderCalcDetails(); renderLayouts(); const has=state.items.length>0; els.btnExportCsv.disabled=!has; els.btnSaveProject.disabled=!has&&!state.services.length&&!state.layouts.length; els.btnClear.disabled=!has&&!state.services.length&&!state.layouts.length; els.btnCopyQuote.disabled=!has&&!state.services.length; els.btnMergeDuplicates.disabled=state.items.length<2; }
+function renderAll(){ renderMaterialSelects(); renderPriceEditors(); renderTable(); renderGeometryEditor(); renderSummary(); renderLog(); renderServices(); renderQuote(); renderProduction(); renderCalcDetails(); renderLayouts(); const has=state.items.length>0; els.btnExportCsv.disabled=!has; els.btnSaveProject.disabled=!has&&!state.services.length&&!state.layouts.length; els.btnClear.disabled=!has&&!state.services.length&&!state.layouts.length; els.btnCopyQuote.disabled=!has&&!state.services.length; els.btnMergeDuplicates.disabled=state.items.length<2; }
 function renderSummary(){ const t=calcTotals(); els.sumFiles.textContent=state.items.length; els.sumQty.textContent=fmtNumber(t.qty,0); els.sumCut.textContent=`${fmtNumber(t.cut,2)} м`; els.sumWeight.textContent=`${fmtNumber(t.weight,1)} кг`; els.sumCost.textContent=t.costKnown?fmtMoney(t.cost):'не заполнено'; els.sumTotal.textContent=fmtMoney(t.saleWithVat); els.sumMargin.textContent=t.costKnown?`${fmtMoney(t.margin)} / ${fmtNumber(t.marginPct,1)}%`:'—'; }
-function itemStatus(item){ const pi=priceIssues(item); if(pi.length)return ['bad',`${pi.length} цена`]; if(!item.rawEntities&&item.source==='dxf')return ['warn','без DXF']; if(item.warnings&&item.warnings.length)return ['warn',`${item.warnings.length} замеч.`]; return ['ok','OK']; }
+function validationIssues(item){
+  const issues=[];
+  if(num(item.bends,0)>0 && num(item.bendLengthMm,0)<=0) issues.push('Гибка указана, но длина гиба = 0. Заполни длину гиба.');
+  return issues;
+}
+function itemStatus(item){ const pi=priceIssues(item); const vi=validationIssues(item); if(pi.length)return ['bad',`${pi.length} цена`]; if(vi.length)return ['warn',`${vi.length} замеч.`]; if(!item.rawEntities&&item.source==='dxf')return ['warn','без DXF']; if(item.warnings&&item.warnings.length)return ['warn',`${item.warnings.length} замеч.`]; return ['ok','OK']; }
 function optionHtml(options, selected){ return options.map(v=>`<option value="${escapeHtml(v)}" ${String(v)===String(selected)?'selected':''}>${escapeHtml(v)}</option>`).join(''); }
 function inputVal(v){ return (v === undefined || v === null || v === 0 || v === '0') ? '' : String(v); }
 
@@ -645,7 +652,7 @@ function renderTable(){
       <td><input class="cell-input service-input" data-pos-field="serviceText" placeholder="текст" value="${escapeHtml(item.serviceText||'')}"></td>
       <td><input class="cell-input note-input" data-pos-field="productionNote" placeholder="примечание" value="${escapeHtml(item.productionNote||'')}"></td>
       <td><span class="money">${fmtMoney(c.sale)}</span></td>
-      <td><span class="status-${st}" title="${escapeHtml([...priceIssues(item), ...(item.warnings||[])].join('\n'))}">${txt}</span></td>`;
+      <td><span class="status-${st}" title="${escapeHtml([...priceIssues(item), ...validationIssues(item), ...(item.warnings||[])].join('\n'))}">${txt}</span></td>`;
     tr.addEventListener('click',(e)=>{ if(e.target.closest('input,select,textarea,button')) return; state.selectedId=item.id; renderAll(); });
     els.itemsBody.appendChild(tr);
   }
@@ -673,6 +680,41 @@ function bindPositionTableEvents(){
       input.addEventListener(input.type==='checkbox'?'change':'change', handler);
     });
   });
+}
+
+function renderGeometryEditor(){
+  if(!els.geometryEditor) return;
+  const item = selectedItem();
+  if(!item){
+    els.geometryEditor.innerHTML = '<div class="muted-line">Выбери позицию, чтобы поправить геометрию вручную.</div>';
+    return;
+  }
+  const g = getGeometry(item);
+  const isDxf = item.source === 'dxf' && item.rawEntities;
+  els.geometryEditor.innerHTML = `
+    <div class="compact-title"><b>Геометрия выбранной позиции</b><span>${escapeHtml(item.name)}${isDxf ? ' · DXF' : ' · ручная/сохраненная'}</span></div>
+    <div class="geometry-grid">
+      <label>Габарит X, мм<input data-geom-quick="width" type="number" step="0.1" min="0" value="${round(g.width,2)}"></label>
+      <label>Габарит Y, мм<input data-geom-quick="height" type="number" step="0.1" min="0" value="${round(g.height,2)}"></label>
+      <label>Длина реза, мм<input data-geom-quick="cutLengthMm" type="number" step="0.1" min="0" value="${round(g.cutLengthMm,2)}"></label>
+      <label>Врезки<input data-geom-quick="pierces" type="number" step="1" min="0" value="${round(g.pierces,0)}"></label>
+      <label>Площадь покраски 1 шт, м²<input data-edit-quick="paintAreaM2One" type="number" step="0.001" min="0" value="${num(item.paintAreaM2One,0)}"></label>
+      ${isDxf ? '<button class="secondary small" type="button" data-recalc-dxf>Вернуть из DXF</button>' : '<span class="muted-line">Для ручной позиции эти поля используются в расчете.</span>'}
+    </div>`;
+  els.geometryEditor.querySelectorAll('[data-geom-quick]').forEach(input=>input.addEventListener('change',()=>{
+    const k=input.dataset.geomQuick;
+    item.geometry=item.geometry||{width:0,height:0,cutLengthMm:0,pierces:0};
+    item.geometry[k]=num(input.value,0);
+    item.geometryOverridden=true;
+    if(k==='width'||k==='height') item.paintAreaM2One=defaultPaintArea(item);
+    renderAll(); autosaveProject();
+  }));
+  els.geometryEditor.querySelectorAll('[data-edit-quick]').forEach(input=>input.addEventListener('change',()=>{
+    item[input.dataset.editQuick]=num(input.value,0);
+    renderAll(); autosaveProject();
+  }));
+  const recalc = els.geometryEditor.querySelector('[data-recalc-dxf]');
+  if(recalc) recalc.addEventListener('click',()=>{ item.geometryOverridden=false; refreshDxfGeometry(item); renderAll(); autosaveProject(); });
 }
 
 function installFillHandles(root){
@@ -797,11 +839,77 @@ function renderEditor(){
   const recalc=$('btnRecalcDxf'); if(recalc) recalc.addEventListener('click',()=>{ item.geometryOverridden=false; refreshDxfGeometry(item); renderAll(); autosaveProject(); });
   $('btnDeleteItem').addEventListener('click',()=>{ if(!confirm('Удалить позицию?'))return; state.items=state.items.filter(x=>x.id!==item.id); state.selectedId=state.items[0]?.id||null; renderAll(); autosaveProject(); });
 }
-function renderLog(){ const item=selectedItem(); if(!item){ els.logBox.textContent='Нет данных.'; return; } const warnings=[...priceIssues(item), ...(item.warnings||[])]; if(!warnings.length){ els.logBox.innerHTML='<div class="okline">Ошибок и замечаний нет.</div>'; return; } els.logBox.innerHTML=warnings.map(w=>`<div class="warnline">${escapeHtml(w)}</div>`).join(''); }
+function renderLog(){ const item=selectedItem(); if(!item){ els.logBox.textContent='Нет данных.'; return; } const warnings=[...priceIssues(item), ...validationIssues(item), ...(item.warnings||[])]; if(!warnings.length){ els.logBox.innerHTML='<div class="okline">Ошибок и замечаний нет.</div>'; return; } els.logBox.innerHTML=warnings.map(w=>`<div class="warnline">${escapeHtml(w)}</div>`).join(''); }
 function renderServices(){ if(!state.services.length){ els.servicesBody.innerHTML='<tr class="empty-row"><td colspan="4">Нет дополнительных строк.</td></tr>'; return; } els.servicesBody.innerHTML=''; for(const svc of state.services){ const tr=document.createElement('tr'); tr.innerHTML=`<td><input data-svc="name" value="${escapeHtml(svc.name)}"></td><td><input data-svc="cost" type="number" step="1" value="${num(svc.cost,0)}"></td><td><input data-svc="sale" type="number" step="1" value="${num(svc.sale,0)}"></td><td><button class="danger small">×</button></td>`; tr.querySelectorAll('[data-svc]').forEach(input=>input.addEventListener('input',()=>{ const k=input.dataset.svc; svc[k]=input.type==='number'?num(input.value,0):input.value; renderSummary(); autosaveProject(); })); tr.querySelector('button').addEventListener('click',()=>{ state.services=state.services.filter(x=>x.id!==svc.id); renderAll(); autosaveProject(); }); els.servicesBody.appendChild(tr); } }
 
-function renderPriceEditors(){ renderMaterialSelects(); syncPaintInputsFromPrices(); renderMetalPriceEditor(); renderCutPriceEditor(); renderBendPriceEditor(); }
+function renderPriceEditors(){ renderMaterialSelects(); syncPaintInputsFromPrices(); renderMetalPriceEditor(); renderSheetPriceEditor(); renderCutPriceEditor(); renderBendPriceEditor(); }
 function renderMetalPriceEditor(){ const thicknesses=[...new Set(prices.materials.flatMap(m=>Object.keys(m.prices||{})))].sort((a,b)=>num(a)-num(b)); let html='<table class="price-table"><thead><tr><th>Материал</th><th>Плотность</th>'+thicknesses.map(t=>`<th>${escapeHtml(t)} мм</th>`).join('')+'<th></th></tr></thead><tbody>'; prices.materials.forEach((m,mi)=>{ html+=`<tr><td><input data-price="material-name" data-mi="${mi}" value="${escapeHtml(m.name)}"></td><td><input data-price="density" data-mi="${mi}" type="number" step="1" value="${num(m.density,7850)}"></td>${thicknesses.map(t=>`<td><input data-price="metal" data-mi="${mi}" data-t="${escapeHtml(t)}" type="number" step="0.01" value="${m.prices?.[t]??''}"></td>`).join('')}<td><button class="danger small" data-remove-material="${mi}">×</button></td></tr>`; }); html+='</tbody></table>'; els.metalPriceEditor.innerHTML=html; bindPriceEditorEvents(); }
+function renderSheetPriceEditor(){
+  if(!els.sheetPriceEditor) return;
+  let rows='';
+  prices.materials.forEach((m, mi)=>{
+    const sheetPrices = m.sheetPrices || {};
+    const thicknesses = Object.keys(sheetPrices).sort((a,b)=>num(a)-num(b));
+    thicknesses.forEach(t=>{
+      const list = Array.isArray(sheetPrices[t]) ? sheetPrices[t] : [];
+      list.forEach((e, ei)=>{
+        rows += `<tr><td><select data-sheet="material" data-mi="${mi}" data-t="${escapeHtml(t)}" data-ei="${ei}">${prices.materials.map((mat,idx)=>`<option value="${idx}" ${idx===mi?'selected':''}>${escapeHtml(mat.name)}</option>`).join('')}</select></td><td><input data-sheet="thickness" data-mi="${mi}" data-t="${escapeHtml(t)}" data-ei="${ei}" type="number" step="0.1" value="${escapeHtml(t)}"></td><td><input data-sheet="width" data-mi="${mi}" data-t="${escapeHtml(t)}" data-ei="${ei}" type="number" step="1" value="${num(e.width,0)}"></td><td><input data-sheet="length" data-mi="${mi}" data-t="${escapeHtml(t)}" data-ei="${ei}" type="number" step="1" value="${num(e.length,0)}"></td><td><input data-sheet="priceKg" data-mi="${mi}" data-t="${escapeHtml(t)}" data-ei="${ei}" type="number" step="0.01" value="${num(e.priceKg,0)}"></td><td><button class="danger small" data-remove-sheet data-mi="${mi}" data-t="${escapeHtml(t)}" data-ei="${ei}">×</button></td></tr>`;
+      });
+    });
+  });
+  els.sheetPriceEditor.innerHTML = `<table class="price-table simple sheet-price-table"><thead><tr><th>Материал</th><th>Толщина</th><th>Ширина</th><th>Длина</th><th>Цена ₽/кг</th><th></th></tr></thead><tbody>${rows || '<tr class="empty-row"><td colspan="6">Раскрои листа не добавлены.</td></tr>'}</tbody></table>`;
+  bindSheetPriceEvents();
+}
+function removeSheetPrice(mi, t, ei){
+  const m=prices.materials[mi]; if(!m || !m.sheetPrices || !Array.isArray(m.sheetPrices[t])) return;
+  m.sheetPrices[t].splice(ei,1);
+  if(!m.sheetPrices[t].length) delete m.sheetPrices[t];
+  savePrices(); renderAll(); autosaveProject();
+}
+function moveSheetPrice(oldMi, oldT, oldEi, newMi, newT){
+  const oldM=prices.materials[oldMi], newM=prices.materials[newMi];
+  if(!oldM || !newM || !oldM.sheetPrices || !Array.isArray(oldM.sheetPrices[oldT])) return null;
+  const entry=oldM.sheetPrices[oldT][oldEi]; if(!entry) return null;
+  oldM.sheetPrices[oldT].splice(oldEi,1);
+  if(!oldM.sheetPrices[oldT].length) delete oldM.sheetPrices[oldT];
+  if(!newM.sheetPrices) newM.sheetPrices={};
+  if(!newM.sheetPrices[newT]) newM.sheetPrices[newT]=[];
+  newM.sheetPrices[newT].push(entry);
+  return entry;
+}
+function bindSheetPriceEvents(){
+  if(!els.sheetPriceEditor) return;
+  els.sheetPriceEditor.querySelectorAll('[data-sheet]').forEach(input=>input.addEventListener('change',()=>{
+    const oldMi=Number(input.dataset.mi), oldT=input.dataset.t, oldEi=Number(input.dataset.ei);
+    const currentM=prices.materials[oldMi];
+    let entry=currentM?.sheetPrices?.[oldT]?.[oldEi];
+    if(!entry) return;
+    let targetMi=oldMi, targetT=oldT;
+    if(input.dataset.sheet==='material') targetMi=Number(input.value);
+    if(input.dataset.sheet==='thickness') targetT=thicknessKey(input.value);
+    if(targetMi!==oldMi || targetT!==oldT) entry=moveSheetPrice(oldMi, oldT, oldEi, targetMi, targetT) || entry;
+    if(input.dataset.sheet==='width') entry.width=Math.max(0,num(input.value,0));
+    if(input.dataset.sheet==='length') entry.length=Math.max(0,num(input.value,0));
+    if(input.dataset.sheet==='priceKg') entry.priceKg=Math.max(0,num(input.value,0));
+    entry.size = `${num(entry.width,0)}х${num(entry.length,0)}`;
+    const mat=prices.materials[targetMi];
+    if(mat){ if(!mat.prices) mat.prices={}; mat.prices[targetT]=num(entry.priceKg,0); }
+    savePrices(); renderAll(); autosaveProject();
+  }));
+  els.sheetPriceEditor.querySelectorAll('[data-remove-sheet]').forEach(btn=>btn.addEventListener('click',()=>removeSheetPrice(Number(btn.dataset.mi), btn.dataset.t, Number(btn.dataset.ei))));
+}
+function addSheetPrice(){
+  const mat = materialNames()[0] || 'гк ст3';
+  const rec = materialRecord(mat);
+  const m = rec || prices.materials[0];
+  if(!m) return;
+  const t = '3';
+  if(!m.sheetPrices) m.sheetPrices = {};
+  if(!m.sheetPrices[t]) m.sheetPrices[t] = [];
+  m.sheetPrices[t].push({ size:'1250х2500', width:1250, length:2500, priceKg: num(m.prices?.[t],0) || 0 });
+  savePrices(); renderAll(); autosaveProject();
+}
+
 function renderCutPriceEditor(){
   const groups = prices.cutGroups || [];
   let html = '<table class="price-table simple"><thead><tr><th>Группа</th><th>Толщина, мм</th><th>Резка, ₽/м</th><th>Прожиг, ₽/шт</th></tr></thead><tbody>';
@@ -922,9 +1030,9 @@ function renderCalcDetails(){
           ${orderCostInput('extraCost','Себ. доп., ₽',oc.extraCost)}
         </div>
         ${oc.priceIssue ? `<div class="warnline">${escapeHtml(oc.priceIssue)}</div>` : ''}
-        <div class="cost-result-row"><span>Вес металла</span><b>${fmtNumber(oc.metalKg,2)} кг</b></div>
-        <div class="cost-result-row"><span>Себ. металл</span><b>${fmtMoney(oc.metalCost)}</b></div>
-        <div class="cost-result-row"><span>Себ. доп.</span><b>${fmtMoney(oc.extraCost)}</b></div>
+        <div class="cost-result-row"><span>Вес металла</span><b>${oc.metalCostKnown ? `${fmtNumber(oc.metalKg,2)} кг` : 'не заполнено'}</b></div>
+        <div class="cost-result-row"><span>Себ. металл</span><b>${oc.metalCostKnown ? fmtMoney(oc.metalCost) : 'не заполнено'}</b></div>
+        <div class="cost-result-row"><span>Себ. доп.</span><b>${oc.extraCost>0 ? fmtMoney(oc.extraCost) : '—'}</b></div>
       </section>
       <section class="totals-box calc-totals-box">
         <div><span>Итого без НДС</span><strong>${fmtMoney(t.saleNoVat)}</strong></div>
@@ -935,7 +1043,7 @@ function renderCalcDetails(){
       </section>
     </div>`;
   els.calcDetails.querySelectorAll('[data-calc-field]').forEach(input=>{ input.addEventListener('focus',()=>setLastFocusedCell(input)); input.addEventListener('pointerdown',()=>setLastFocusedCell(input)); input.addEventListener('change',()=>{ const item=state.items.find(x=>x.id===num(input.closest('tr').dataset.id)); if(!item)return; applyCalcField(item,input.dataset.calcField,input.value); renderAll(); autosaveProject(); }); });
-  els.calcDetails.querySelectorAll('[data-order-cost]').forEach(input=>input.addEventListener('input',()=>{ const k=input.dataset.orderCost; state.orderCost[k]=input.type==='number'?num(input.value,0):input.value; if(['material','thicknessMm','widthMm','lengthMm'].includes(k)){ const rec=materialRecord(state.orderCost.material); state.orderCost.priceKg=exactMaterialPrice(rec,state.orderCost.thicknessMm,state.orderCost.widthMm,state.orderCost.lengthMm,0); } renderAll(); autosaveProject(); }));
+  els.calcDetails.querySelectorAll('[data-order-cost]').forEach(input=>input.addEventListener('change',()=>{ const k=input.dataset.orderCost; state.orderCost[k]=input.type==='number'?num(input.value,0):input.value; if(['material','thicknessMm','widthMm','lengthMm'].includes(k)){ const rec=materialRecord(state.orderCost.material); state.orderCost.priceKg=exactMaterialPrice(rec,state.orderCost.thicknessMm,state.orderCost.widthMm,state.orderCost.lengthMm,0); } renderAll(); autosaveProject(); }));
   installFillHandles(els.calcDetails);
 }
 function renderLayouts(){
@@ -998,8 +1106,8 @@ async function addLayoutFiles(files){
 }
 
 function bindEvents(){ els.btnSelectFiles.addEventListener('click',()=>els.fileInput.click()); els.btnSelectFolder.addEventListener('click',()=>els.folderInput.click()); els.fileInput.addEventListener('change',e=>handleFiles(e.target.files)); els.folderInput.addEventListener('change',e=>handleFiles(e.target.files)); els.dropzone.addEventListener('dragover',e=>{e.preventDefault();els.dropzone.classList.add('dragover');}); els.dropzone.addEventListener('dragleave',()=>els.dropzone.classList.remove('dragover')); els.dropzone.addEventListener('drop',e=>{e.preventDefault();els.dropzone.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
-  if(els.btnAddManual)els.btnAddManual.addEventListener('click',addManualItem); if(els.btnAddManualPositions)els.btnAddManualPositions.addEventListener('click',addManualItem); els.btnAddService.addEventListener('click',addService); els.btnMergeDuplicates.addEventListener('click',mergeDuplicates); els.btnSaveProject.addEventListener('click',saveProject); els.btnLoadProject.addEventListener('click',()=>els.projectFileInput.click()); els.projectFileInput.addEventListener('change',e=>{ if(e.target.files[0])loadProject(e.target.files[0]).catch(err=>alert(err.message)); }); els.btnExportCsv.addEventListener('click',exportCsv); els.btnCopyQuote.addEventListener('click',copyQuote); els.btnClear.addEventListener('click',()=>{ if(!confirm('Очистить расчет?'))return; state.items=[]; state.services=[]; state.layouts=[]; state.orderCost={material:'гк ст3',widthMm:1250,lengthMm:2500,thicknessMm:3,sheets:1,priceKg:63.2,extraCost:0}; state.selectedId=null; renderAll(); autosaveProject(); });
-  els.btnResetPrices.addEventListener('click',()=>{ if(!confirm('Сбросить базу цен к значениям по умолчанию?'))return; prices=clone(DEFAULT_PRICES); savePrices(); syncPaintInputsFromPrices(); renderAll(); }); els.btnExportPrices.addEventListener('click',exportPrices); els.btnImportPrices.addEventListener('click',()=>els.priceFileInput.click()); els.priceFileInput.addEventListener('change',e=>{ if(e.target.files[0])importPrices(e.target.files[0]).catch(err=>alert(err.message)); }); els.btnAddMaterial.addEventListener('click',addMaterial); els.btnAddCutThickness.addEventListener('click',addCutThickness); els.btnAddBendThickness.addEventListener('click',addBendThickness);
+  if(els.btnAddManual)els.btnAddManual.addEventListener('click',addManualItem); if(els.btnAddManualPositions)els.btnAddManualPositions.addEventListener('click',addManualItem); els.btnAddService.addEventListener('click',addService); els.btnMergeDuplicates.addEventListener('click',mergeDuplicates); els.btnSaveProject.addEventListener('click',saveProject); els.btnLoadProject.addEventListener('click',()=>els.projectFileInput.click()); els.projectFileInput.addEventListener('change',e=>{ if(e.target.files[0])loadProject(e.target.files[0]).catch(err=>alert(err.message)); }); els.btnExportCsv.addEventListener('click',exportCsv); els.btnCopyQuote.addEventListener('click',copyQuote); els.btnClear.addEventListener('click',()=>{ if(!confirm('Очистить расчет?'))return; state.items=[]; state.services=[]; state.layouts=[]; state.orderCost={material:'гк ст3',widthMm:1250,lengthMm:2500,thicknessMm:3,sheets:0,priceKg:63.2,extraCost:0}; state.selectedId=null; renderAll(); autosaveProject(); });
+  els.btnResetPrices.addEventListener('click',()=>{ if(!confirm('Сбросить базу цен к значениям по умолчанию?'))return; prices=clone(DEFAULT_PRICES); savePrices(); syncPaintInputsFromPrices(); renderAll(); }); els.btnExportPrices.addEventListener('click',exportPrices); els.btnImportPrices.addEventListener('click',()=>els.priceFileInput.click()); els.priceFileInput.addEventListener('change',e=>{ if(e.target.files[0])importPrices(e.target.files[0]).catch(err=>alert(err.message)); }); els.btnAddMaterial.addEventListener('click',addMaterial); if(els.btnAddSheetPrice)els.btnAddSheetPrice.addEventListener('click',addSheetPrice); els.btnAddCutThickness.addEventListener('click',addCutThickness); els.btnAddBendThickness.addEventListener('click',addBendThickness);
   document.querySelectorAll('.nav-tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); btn.classList.add('active'); const view=$(`view-${btn.dataset.view}`); if(view)view.classList.add('active'); }));
   if(els.btnBulkApply)els.btnBulkApply.addEventListener('click',()=>applyBulk(false)); if(els.btnBulkDown)els.btnBulkDown.addEventListener('click',()=>applyBulk(true)); if(els.btnClearFilters)els.btnClearFilters.addEventListener('click',clearPositionFilters);
   if(els.btnPrintQuote)els.btnPrintQuote.addEventListener('click',()=>printSection('quote')); if(els.btnPrintProduction)els.btnPrintProduction.addEventListener('click',()=>printSection('production'));

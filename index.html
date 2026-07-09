@@ -11,7 +11,7 @@
     <div>
       <div class="eyebrow">Парк Металл · current site</div>
       <h1>DXF калькулятор заказа</h1>
-      <p>Версия v1.1: прайс материалов, резки и гибки от 10.06.2026.</p>
+      <p>Версия v1.2: ручная геометрия, себестоимость без автозаполнения и редактор раскроев.</p>
     </div>
     <div class="top-actions">
       <button id="btnAddManual" class="secondary top-hidden">+ Ручная позиция</button>
@@ -126,6 +126,7 @@
             <tbody id="itemsBody"><tr class="empty-row"><td colspan="18">Файлы пока не загружены.</td></tr></tbody>
           </table>
         </div>
+        <div id="geometryEditor" class="geometry-editor compact-editor"></div>
       </section>
 
       <section class="split main-split hidden-preview-editor">
@@ -253,6 +254,7 @@
 
         <div class="price-tabs" role="tablist">
           <button class="price-tab active" data-tab="metal">Металл</button>
+          <button class="price-tab" data-tab="sheets">Раскрои листа</button>
           <button class="price-tab" data-tab="cut">Резка</button>
           <button class="price-tab" data-tab="bend">Гибка</button>
           <button class="price-tab" data-tab="paint">Покраска</button>
@@ -261,6 +263,11 @@
         <div class="price-tab-content active" id="tab-metal">
           <div class="price-toolbar"><span>Материал и цена, ₽/кг. Продажа = цена × коэф. металла.</span><button id="btnAddMaterial" class="secondary small">+ материал</button></div>
           <div id="metalPriceEditor" class="price-editor"></div>
+        </div>
+
+        <div class="price-tab-content" id="tab-sheets">
+          <div class="price-toolbar"><span>Редактор раскроев: материал, толщина, ширина, длина и цена ₽/кг. По нему считается себестоимость листа.</span><button id="btnAddSheetPrice" class="secondary small">+ раскрой</button></div>
+          <div id="sheetPriceEditor" class="price-editor"></div>
         </div>
 
         <div class="price-tab-content" id="tab-cut">
@@ -305,7 +312,7 @@
   </main>
 
   <footer class="no-print">
-    <span>v1.1 current site</span>
+    <span>v1.2 current site</span>
     <span>Локальная работа: файлы не отправляются в интернет.</span>
   </footer>
 
