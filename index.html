@@ -11,7 +11,7 @@
     <div>
       <div class="eyebrow">Парк Металл · current site</div>
       <h1>DXF калькулятор заказа</h1>
-      <p>Версия v1.2: ручная геометрия, себестоимость без автозаполнения и редактор раскроев.</p>
+      <p>Версия v1.4: добавлено ИИ-управление заказом через локальный сервер или простые команды.</p>
     </div>
     <div class="top-actions">
       <button id="btnAddManual" class="secondary top-hidden">+ Ручная позиция</button>
@@ -33,6 +33,7 @@
     <button class="nav-tab" data-view="production">Производство</button>
     <button class="nav-tab" data-view="layouts">Раскладки</button>
     <button class="nav-tab" data-view="prices">База цен</button>
+    <button class="nav-tab" data-view="ai">ИИ</button>
     <button class="nav-tab" data-view="settings">Настройки</button>
   </nav>
 
@@ -88,6 +89,7 @@
           </div>
           <div class="mini-actions">
             <button id="btnAddManualPositions" class="secondary small" type="button">+ Ручная позиция</button>
+            <button id="btnCheckOrder" class="secondary small" type="button">Проверить заказ</button>
           </div>
         </div>
         <div class="bulk-toolbar no-print">
@@ -293,6 +295,45 @@
       </section>
     </section>
 
+    <section class="view" id="view-ai">
+      <section class="panel ai-panel">
+        <div class="panel-title">
+          <div>
+            <h2>ИИ-управление заказом</h2>
+            <span>Пиши обычным языком. ИИ предложит действия, а ты применяешь их кнопкой.</span>
+          </div>
+          <div class="ai-status" id="aiStatus">Готов</div>
+        </div>
+        <div class="ai-layout">
+          <div class="ai-left">
+            <div id="aiChat" class="ai-chat"><div class="ai-empty">Напиши команду. Например: «поставь всем Ст3 3 мм», «всем RAL 9005», «проверь заказ», «добавь доставку 5000».</div></div>
+            <div class="ai-input-row">
+              <textarea id="aiPrompt" rows="3" placeholder="Например: проверь заказ и скажи, что исправить"></textarea>
+              <div class="ai-buttons">
+                <button id="btnAiSend" class="primary small" type="button">Отправить ИИ</button>
+                <button id="btnAiClear" class="secondary small" type="button">Очистить чат</button>
+              </div>
+            </div>
+            <div class="hint">Ctrl+Enter — отправить. Если сервер ИИ не запущен, простые команды разберутся локально.</div>
+          </div>
+          <div class="ai-right">
+            <h3>Действия к применению</h3>
+            <div id="aiActions" class="ai-actions"><div class="muted-line">Нет действий для применения.</div></div>
+            <button id="btnAiApply" class="primary" type="button" disabled>Применить действия</button>
+            <div class="hint ai-hint">
+              Примеры команд:<br>
+              — всем материал 08пс хк<br>
+              — выбранным толщина 2 мм<br>
+              — всем RAL 9005 1 слой<br>
+              — гибка 2, длина гиба 500<br>
+              — доставка 5000<br>
+              — себестоимость гк ст3 5 мм 1500х6000 1
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
     <section class="view" id="view-settings">
       <section class="panel settings-panel">
         <div class="panel-title"><h2>Настройки расчета</h2><span>Сюда убрано то, что редко трогаешь.</span></div>
@@ -312,7 +353,7 @@
   </main>
 
   <footer class="no-print">
-    <span>v1.2 current site</span>
+    <span>v1.4 current site</span>
     <span>Локальная работа: файлы не отправляются в интернет.</span>
   </footer>
 
