@@ -230,3 +230,45 @@ tr.fill-target td { background: #eaf2ff !important; }
   body[data-print="quote"] .view:not(#view-quote),
   body[data-print="production"] .view:not(#view-production) { display: none !important; }
 }
+
+/* v0.9 fixes */
+.quote-terms { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.quote-terms h3 { margin: 0 0 10px; font-size: 15px; }
+.quote-terms-grid { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 8px; }
+.quote-terms-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.quote-terms-grid .wide-label { grid-column: 1 / -1; }
+.quote-terms-grid input, .quote-terms-grid textarea { width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 7px 8px; background: #fff; color: var(--text); }
+.quote-terms-text { margin-top: 10px; line-height: 1.45; }
+.muted-line { color: var(--muted); }
+@media print {
+  .quote-terms-grid { display: none !important; }
+  .quote-terms { break-inside: avoid; }
+}
+
+/* v1.0: сортировка, фильтры, вставка из Excel */
+.sort-head {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.sort-head:hover { text-decoration: underline; }
+.filter-row th { top: 28px !important; z-index: 3; background: #f8fafc; padding: 3px 5px; }
+.filter-cell {
+  width: 100%;
+  min-width: 54px;
+  border: 1px solid var(--line) !important;
+  background: #fff !important;
+  border-radius: 3px !important;
+  padding: 3px 4px !important;
+  font-size: 11px;
+  font-weight: 400;
+}
+.paste-hint { color: var(--muted); font-size: 12px; font-weight: 600; }
+@media print { .filter-row { display: none !important; } }

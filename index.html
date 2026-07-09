@@ -11,7 +11,7 @@
     <div>
       <div class="eyebrow">Парк Металл · current site</div>
       <h1>DXF калькулятор заказа</h1>
-      <p>Версия v0.8: стабильные расчеты, точные цены по прайсу и себестоимость заказа.</p>
+      <p>Версия v1.1: прайс материалов, резки и гибки от 10.06.2026.</p>
     </div>
     <div class="top-actions">
       <button id="btnAddManual" class="secondary top-hidden">+ Ручная позиция</button>
@@ -84,7 +84,10 @@
         <div class="panel-title">
           <div>
             <h2>Позиции заказа</h2>
-            <span>Редактируй прямо в таблице. Маленькое превью в каждой строке.</span>
+            <span>Редактируй прямо в таблице. Можно сортировать, фильтровать и вставлять столбцы из Excel.</span>
+          </div>
+          <div class="mini-actions">
+            <button id="btnAddManualPositions" class="secondary small" type="button">+ Ручная позиция</button>
           </div>
         </div>
         <div class="bulk-toolbar no-print">
@@ -110,6 +113,8 @@
           <input id="bulkValue" placeholder="значение">
           <button id="btnBulkApply" class="secondary small" type="button">К выбранным</button>
           <button id="btnBulkDown" class="secondary small" type="button">От строки вниз</button>
+          <button id="btnClearFilters" class="secondary small" type="button">Сброс фильтров</button>
+          <span class="paste-hint">Ctrl+V из Excel в ячейку: столбец заполнится вниз</span>
         </div>
         <div class="table-wrap positions-wrap">
           <table id="itemsTable" class="positions-table">
@@ -184,7 +189,16 @@
           <div><span>НДС</span><strong id="quoteVat">0 ₽</strong></div>
           <div class="grand"><span>Итого с НДС</span><strong id="quoteTotal">0 ₽</strong></div>
         </div>
-        <div class="quote-note">Срок и условия оплаты заполняются менеджером. Цены указаны по текущей базе расчета проекта.</div>
+                <section class="quote-terms">
+          <h3>Условия КП</h3>
+          <div class="quote-terms-grid">
+            <label>Срок изготовления<input id="leadTime" placeholder="например: 5–7 рабочих дней"></label>
+            <label>Оплата<input id="paymentTerms" placeholder="например: 70% предоплата, 30% по готовности"></label>
+            <label>Доставка<input id="deliveryTerms" placeholder="самовывоз / доставка отдельно"></label>
+            <label class="wide-label">Комментарий клиенту<textarea id="clientComment" rows="2" placeholder="дополнительные условия"></textarea></label>
+          </div>
+          <div id="quoteTermsText" class="quote-terms-text"></div>
+        </section>
       </section>
     </section>
 
@@ -250,12 +264,12 @@
         </div>
 
         <div class="price-tab-content" id="tab-cut">
-          <div class="price-toolbar"><span>Цена резки по толщине, ₽/м. Минималка выключена, добавляй вручную в доп. строках.</span><button id="btnAddCutThickness" class="secondary small">+ толщина</button></div>
+          <div class="price-toolbar"><span>Цена резки и прожига по группам материалов. Если толщины нет в прайсе — строка подсветится ошибкой.</span><button id="btnAddCutThickness" class="secondary small">+ толщина</button></div>
           <div id="cutPriceEditor" class="price-editor"></div>
         </div>
 
         <div class="price-tab-content" id="tab-bend">
-          <div class="price-toolbar"><span>Цена гибки по толщине, ₽/м гиба.</span><button id="btnAddBendThickness" class="secondary small">+ толщина</button></div>
+          <div class="price-toolbar"><span>Цена гибки по толщине и длине гиба: до 500 / до 1500 / до 3000 мм.</span><button id="btnAddBendThickness" class="secondary small">+ толщина</button></div>
           <div id="bendPriceEditor" class="price-editor"></div>
         </div>
 
@@ -265,8 +279,8 @@
             <label>Себест. покраски, ₽/м²<input id="paintCostM2" type="number" step="1"></label>
             <label>Расход порошка, кг/м²<input id="powderConsumption" type="number" step="0.01"></label>
             <label>Порошок, ₽/кг<input id="powderPrice" type="number" step="1"></label>
-            <label>Мин. покраски, ₽<input id="minPaint" type="number" step="1"></label>
-            <label>Целевая маржа, %<input id="targetMargin" type="number" step="1" value="0"></label>
+            <label class="hidden-setting">Мин. покраски, ₽<input id="minPaint" type="number" step="1"></label>
+            <label class="hidden-setting">Целевая маржа, %<input id="targetMargin" type="number" step="1" value="0"></label>
           </div>
         </div>
       </section>
@@ -291,7 +305,7 @@
   </main>
 
   <footer class="no-print">
-    <span>v0.8 current site</span>
+    <span>v1.1 current site</span>
     <span>Локальная работа: файлы не отправляются в интернет.</span>
   </footer>
 
