@@ -220,3 +220,13 @@ tr.fill-target td { background: #eaf2ff !important; }
 .cost-result-row { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding: 7px 0; }
 .calc-totals-box { margin-top: 0; }
 @media (max-width: 1100px) { .cost-summary-grid { grid-template-columns: 1fr; } .cost-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* v0.8 fixes */
+.top-hidden { display: none !important; }
+.price-error-row td { background: #fff1f2 !important; }
+.price-error-row .status-bad { background: #fee2e2; color: #991b1b; }
+.cost-warning { color: #b45309; font-weight: 800; }
+@media print {
+  body[data-print="quote"] .view:not(#view-quote),
+  body[data-print="production"] .view:not(#view-production) { display: none !important; }
+}

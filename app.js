@@ -1,9 +1,9 @@
 'use strict';
 
-const VERSION = '0.7';
-const STORAGE_KEY = 'pm_dxf_calc_current_site_v07_settings';
-const PRICE_KEY = 'pm_dxf_calc_current_site_v07_prices';
-const PROJECT_KEY = 'pm_dxf_calc_current_site_v07_autosave';
+const VERSION = '0.8';
+const STORAGE_KEY = 'pm_dxf_calc_current_site_v08_settings';
+const PRICE_KEY = 'pm_dxf_calc_current_site_v08_prices';
+const PROJECT_KEY = 'pm_dxf_calc_current_site_v08_autosave';
 
 const state = { items: [], services: [], layouts: [], orderCost: { material: 'Ст3', widthMm: 0, lengthMm: 0, thicknessMm: 3, sheets: 1, priceKg: 67, extraCost: 0 }, selectedId: null, nextId: 1, nextServiceId: 1, nextLayoutId: 1 };
 let fillDrag = null;
@@ -65,12 +65,36 @@ function nearestPrice(table, thickness, fallback = 0) {
   for (const k of keys) { const d = Math.abs(num(k) - thickness); if (d < bestDelta) { best = k; bestDelta = d; } }
   return num(table[best], fallback);
 }
-function materialRecord(name) { return prices.materials.find(m => m.name === name) || prices.materials[0]; }
+function materialRecord(name) { return prices.materials.find(m => m.name === name) || null; }
 function materialNames() { return prices.materials.map(m => m.name); }
+function materialOptionsHtml(selected) {
+  const names = materialNames();
+  const options = (selected && !names.includes(selected)) ? [selected, ...names] : names;
+  return optionHtml(options, selected || options[0]);
+}
+function exactPrice(table, thickness, fallback = 0) {
+  const key = thicknessKey(thickness);
+  if (!table || !Object.prototype.hasOwnProperty.call(table, key)) return fallback;
+  return num(table[key], fallback);
+}
+function hasExactPrice(table, thickness) {
+  const key = thicknessKey(thickness);
+  return Boolean(table && Object.prototype.hasOwnProperty.call(table, key) && table[key] !== '' && table[key] !== null && table[key] !== undefined);
+}
 function densityFor(item) { return num(materialRecord(item.material)?.density, 7850); }
-function metalPriceFor(item) { return nearestPrice(materialRecord(item.material)?.prices, num(item.thickness,0), 0); }
-function cutPriceFor(item) { return nearestPrice(prices.cut, num(item.thickness,0), 0); }
-function bendPriceFor(item) { return nearestPrice(prices.bend, num(item.thickness,0), 0); }
+function metalPriceFor(item) { const rec = materialRecord(item.material); return rec ? exactPrice(rec.prices, num(item.thickness,0), 0) : 0; }
+function cutPriceFor(item) { return exactPrice(prices.cut, num(item.thickness,0), 0); }
+function bendPriceFor(item) { return exactPrice(prices.bend, num(item.thickness,0), 0); }
+function priceIssues(item) {
+  const issues = [];
+  const t = num(item.thickness, 0);
+  const rec = materialRecord(item.material);
+  if (!rec) issues.push(`Материал «${item.material || '—'}» отсутствует в базе цен.`);
+  else if (item.ops?.metal && !hasExactPrice(rec.prices, t)) issues.push(`Нет цены металла ${rec.name} ${thicknessKey(t)} мм. Добавь толщину в базу цен.`);
+  if (item.ops?.cut && !hasExactPrice(prices.cut, t)) issues.push(`Нет цены резки для толщины ${thicknessKey(t)} мм.`);
+  if (num(item.bends, 0) > 0 && !hasExactPrice(prices.bend, t)) issues.push(`Нет цены гибки для толщины ${thicknessKey(t)} мм.`);
+  return issues;
+}
 
 function loadPrices() {
   try {
@@ -147,6 +171,10 @@ function parseFilename(fileName) {
     const tMatch = clean.match(/(?:^|\s|_|-)(?:t|т|s|толщ(?:ина)?\.?)*\s*=?\s*(\d+(?:[.,]\d+)?)\s*(?:мм|mm)(?:\s|$|_|-)/i);
     if (tMatch) thickness = num(tMatch[1], null);
   }
+  if (thickness == null) {
+    const sheetMatch = clean.match(/(?:^|\s)(?:лист|пластина|s|т)\s*(\d+(?:[.,]\d+)?)(?=\s|$)/i);
+    if (sheetMatch) thickness = num(sheetMatch[1], null);
+  }
   return { name: clean, qty: qty || 1, thickness: thickness || getSettings().defaultThickness };
 }
 
@@ -210,7 +238,29 @@ function allSegments(entities){ const segments=[]; for(const e of entities){ con
 function keyPoint(p,tolerance=0.05){ return `${Math.round(p.x/tolerance)}:${Math.round(p.y/tolerance)}`; }
 function segmentKey(a,b,tolerance=0.05){ const ka=keyPoint(a,tolerance), kb=keyPoint(b,tolerance); return ka<kb?`${ka}|${kb}`:`${kb}|${ka}`; }
 function duplicateSegmentLength(segments){ const seen=new Map(); let dup=0; for(const [a,b] of segments){ const key=segmentKey(a,b,0.1), l=dist(a,b); if(seen.has(key))dup+=Math.min(l,seen.get(key)); else seen.set(key,l); } return dup; }
-function openPolylineCount(entities){ let c=0; for(const e of entities){ if(e.type==='LINE'||e.type==='ARC'||e.type==='SPLINE')c++; if((e.type==='LWPOLYLINE'||e.type==='POLYLINE')&&!e.closed)c++; } return c; }
+function openPolylineCount(entities){
+  let c=0;
+  const loose=[];
+  for(const e of entities){
+    if(e.type==='LINE') loose.push([e.p1,e.p2]);
+    else if(e.type==='ARC'||e.type==='SPLINE') c++;
+    else if((e.type==='LWPOLYLINE'||e.type==='POLYLINE')&&!e.closed) c++;
+  }
+  if(loose.length){
+    const adj=new Map(), edgeCount=new Map();
+    const add=(a,b)=>{ if(!adj.has(a))adj.set(a,new Set()); adj.get(a).add(b); edgeCount.set(a,(edgeCount.get(a)||0)+1); };
+    for(const [a,b] of loose){ const ka=keyPoint(a), kb=keyPoint(b); add(ka,kb); add(kb,ka); }
+    const visited=new Set();
+    for(const node of adj.keys()){
+      if(visited.has(node)) continue;
+      const stack=[node], comp=[]; visited.add(node);
+      while(stack.length){ const n=stack.pop(); comp.push(n); for(const nb of adj.get(n)||[]) if(!visited.has(nb)){ visited.add(nb); stack.push(nb); } }
+      const closed = comp.length>=3 && comp.every(n => (edgeCount.get(n)||0) === 2);
+      if(!closed) c++;
+    }
+  }
+  return c;
+}
 function closedComponentsFromLooseLines(entities){ const loose=[]; for(const e of entities) if(e.type==='LINE') loose.push([e.p1,e.p2]); if(!loose.length)return 0; const adj=new Map(); const add=(a,b)=>{ if(!adj.has(a))adj.set(a,[]); adj.get(a).push(b); }; for(const [a,b] of loose){ const ka=keyPoint(a), kb=keyPoint(b); add(ka,kb); add(kb,ka); } const visited=new Set(); let loops=0; for(const node of adj.keys()){ if(visited.has(node))continue; const stack=[node], comp=[]; visited.add(node); while(stack.length){ const n=stack.pop(); comp.push(n); for(const nb of adj.get(n)||[]) if(!visited.has(nb)){visited.add(nb); stack.push(nb);} } if(comp.length>=3 && comp.every(n=>(adj.get(n)||[]).length===2)) loops++; } return loops; }
 function ignoreLayerKeywords(){ return getSettings().ignoreLayers.split(/[;,]/).map(x=>x.trim().toUpperCase()).filter(Boolean); }
 function filterEntitiesByLayer(entities){ const keys=ignoreLayerKeywords(); if(!keys.length)return entities.slice(); return entities.filter(e=>!keys.some(k=>String(e.layer||'').toUpperCase().includes(k))); }
@@ -301,26 +351,29 @@ function calcServices(){ const s=getSettings(); const sale=state.services.reduce
 function calcOrderCost(){
   const oc = state.orderCost || {};
   const material = oc.material || getSettings().defaultMaterial || 'Ст3';
-  const density = (prices.materials.find(m => m.name === material)?.density) || MATERIAL_DENSITY[material] || 7850;
+  const rec = materialRecord(material);
+  const density = num(rec?.density, 7850);
   const widthMm = Math.max(0, num(oc.widthMm, 0));
   const lengthMm = Math.max(0, num(oc.lengthMm, 0));
   const thicknessMm = Math.max(0, num(oc.thicknessMm, 0));
   const sheets = Math.max(0, num(oc.sheets, 1));
-  const priceKg = Math.max(0, num(oc.priceKg, 0));
+  const basePriceKg = rec && hasExactPrice(rec.prices, thicknessMm) ? exactPrice(rec.prices, thicknessMm, 0) : 0;
+  const priceKg = Math.max(0, num(oc.priceKg, 0) || basePriceKg);
+  const priceIssue = !rec ? `Материал «${material}» отсутствует в базе цен.` : (!basePriceKg && thicknessMm > 0 ? `Нет цены металла ${material} ${thicknessKey(thicknessMm)} мм в базе цен.` : '');
   const metalKg = widthMm * lengthMm * thicknessMm / 1_000_000_000 * density * sheets;
   const metalCost = metalKg * priceKg;
   const extraCost = Math.max(0, num(oc.extraCost, 0));
-  return { material, density, widthMm, lengthMm, thicknessMm, sheets, priceKg, metalKg, metalCost, extraCost, cost: metalCost + extraCost };
+  return { material, density, widthMm, lengthMm, thicknessMm, sheets, priceKg, basePriceKg, priceIssue, metalKg, metalCost, extraCost, cost: metalCost + extraCost };
 }
-function calcTotals(){ const s=getSettings(); const items=state.items.reduce((acc,item)=>{ const c=calcItem(item); acc.qty+=c.qty; acc.cut+=c.cutMTotal; acc.weight+=c.weightTotal; acc.sale+=c.sale; return acc; },{qty:0,cut:0,weight:0,sale:0}); const svc=calcServices(); const oc=calcOrderCost(); const saleRaw=items.sale+svc.sale, cost=oc.cost+svc.cost, saleNoVat=saleToNoVat(saleRaw,s), saleWithVat=saleToWithVat(saleRaw,s), vat=Math.max(0,saleWithVat-saleNoVat), margin=saleNoVat-cost, marginPct=saleNoVat>0?margin/saleNoVat*100:0; return {...items,serviceSale:svc.sale,serviceCost:svc.cost,orderMetalCost:oc.metalCost,orderExtraCost:oc.extraCost,orderMetalKg:oc.metalKg,saleRaw,saleNoVat,saleWithVat,vat,cost,margin,marginPct}; }
+function calcTotals(){ const s=getSettings(); const items=state.items.reduce((acc,item)=>{ const c=calcItem(item); acc.qty+=c.qty; acc.cut+=c.cutMTotal; acc.weight+=c.weightTotal; acc.sale+=c.sale; return acc; },{qty:0,cut:0,weight:0,sale:0}); const svc=calcServices(); const oc=calcOrderCost(); const saleRaw=items.sale+svc.sale, cost=oc.cost+svc.cost, saleNoVat=saleToNoVat(saleRaw,s), saleWithVat=saleToWithVat(saleRaw,s), vat=Math.max(0,saleWithVat-saleNoVat), costKnown=cost>0, margin=costKnown?saleNoVat-cost:0, marginPct=(costKnown&&saleNoVat>0)?margin/saleNoVat*100:null; return {...items,serviceSale:svc.sale,serviceCost:svc.cost,orderMetalCost:oc.metalCost,orderExtraCost:oc.extraCost,orderMetalKg:oc.metalKg,saleRaw,saleNoVat,saleWithVat,vat,cost,costKnown,margin,marginPct}; }
 
 async function handleFiles(files){ const list=[...files].filter(f=>f.name.toLowerCase().endsWith('.dxf')); if(!list.length)return; for(const file of list){ try{ const text=await file.text(); const meta=parseFilename(file.name); const parsed=parseDxf(text); const item=makeItem({source:'dxf',fileName:file.webkitRelativePath||file.name,name:meta.name,qty:meta.qty,thickness:meta.thickness,rawEntities:parsed.entities,rawWarnings:parsed.warnings}); item.rawSize=file.size; state.items.push(item); } catch(err){ const item=makeItem({source:'manual',fileName:file.name,name:file.name,qty:1}); item.warnings.push(`Ошибка чтения DXF: ${err.message||err}`); state.items.push(item); } } detectDuplicates(); if(!state.selectedId&&state.items.length)state.selectedId=state.items[0].id; renderAll(); autosaveProject(); }
 function detectDuplicates(){ for(const item of state.items)item.duplicateKey=''; const map=new Map(); for(const item of state.items){ const g=getGeometry(item); const key=`${round(g.width,1)}x${round(g.height,1)}|${round(g.cutLengthMm,1)}|${round(g.pierces,0)}|${item.thickness}|${item.material}`; item.duplicateKey=key; if(!map.has(key))map.set(key,[]); map.get(key).push(item); } for(const group of map.values()){ if(group.length>1){ const names=group.map(g=>g.name).join(', '); for(const item of group){ const msg=`Похожа на другие детали: ${names}. Можно объединить количество, если геометрия совпадает.`; if(!item.warnings.includes(msg))item.warnings.push(msg); } } } }
 function mergeDuplicates(){ detectDuplicates(); const groups=new Map(); for(const item of state.items){ if(!groups.has(item.duplicateKey))groups.set(item.duplicateKey,[]); groups.get(item.duplicateKey).push(item); } const merged=[]; let mergedCount=0; for(const group of groups.values()){ const first=group[0]; if(group.length>1){ first.qty=group.reduce((a,x)=>a+num(x.qty,0),0); first.name=`${first.name} / объединено ${group.length} поз.`; first.note=`${first.note||''}\nОбъединено: ${group.map(x=>x.fileName||x.name).join('; ')}`.trim(); first.warnings=first.warnings.filter(w=>!w.startsWith('Похожа на другие детали')); mergedCount+=group.length-1; } merged.push(first); } state.items=merged; if(mergedCount)alert(`Объединено дублей: ${mergedCount}`); renderAll(); autosaveProject(); }
 
 function renderAll(){ renderMaterialSelects(); renderPriceEditors(); renderTable(); renderSummary(); renderLog(); renderServices(); renderQuote(); renderProduction(); renderCalcDetails(); renderLayouts(); const has=state.items.length>0; els.btnExportCsv.disabled=!has; els.btnSaveProject.disabled=!has&&!state.services.length&&!state.layouts.length; els.btnClear.disabled=!has&&!state.services.length&&!state.layouts.length; els.btnCopyQuote.disabled=!has&&!state.services.length; els.btnMergeDuplicates.disabled=state.items.length<2; }
-function renderSummary(){ const t=calcTotals(); els.sumFiles.textContent=state.items.length; els.sumQty.textContent=fmtNumber(t.qty,0); els.sumCut.textContent=`${fmtNumber(t.cut,2)} м`; els.sumWeight.textContent=`${fmtNumber(t.weight,1)} кг`; els.sumCost.textContent=fmtMoney(t.cost); els.sumTotal.textContent=fmtMoney(t.saleWithVat); els.sumMargin.textContent=`${fmtMoney(t.margin)} / ${fmtNumber(t.marginPct,1)}%`; }
-function itemStatus(item){ if(!item.rawEntities&&item.source==='dxf')return ['bad','ошибка']; if(item.warnings&&item.warnings.length)return ['warn',`${item.warnings.length} замеч.`]; return ['ok','OK']; }
+function renderSummary(){ const t=calcTotals(); els.sumFiles.textContent=state.items.length; els.sumQty.textContent=fmtNumber(t.qty,0); els.sumCut.textContent=`${fmtNumber(t.cut,2)} м`; els.sumWeight.textContent=`${fmtNumber(t.weight,1)} кг`; els.sumCost.textContent=t.costKnown?fmtMoney(t.cost):'не заполнено'; els.sumTotal.textContent=fmtMoney(t.saleWithVat); els.sumMargin.textContent=t.costKnown?`${fmtMoney(t.margin)} / ${fmtNumber(t.marginPct,1)}%`:'—'; }
+function itemStatus(item){ const pi=priceIssues(item); if(pi.length)return ['bad',`${pi.length} цена`]; if(!item.rawEntities&&item.source==='dxf')return ['bad','ошибка']; if(item.warnings&&item.warnings.length)return ['warn',`${item.warnings.length} замеч.`]; return ['ok','OK']; }
 function optionHtml(options, selected){ return options.map(v=>`<option value="${escapeHtml(v)}" ${String(v)===String(selected)?'selected':''}>${escapeHtml(v)}</option>`).join(''); }
 function inputVal(v){ return (v === undefined || v === null || v === 0 || v === '0') ? '' : String(v); }
 function yesNo(v){ return v ? 'Да' : '—'; }
@@ -332,13 +385,13 @@ function renderTable(){
   for(const item of state.items){
     normalizeItem(item);
     const c=calcItem(item), g=getGeometry(item), [st,txt]=itemStatus(item);
-    const tr=document.createElement('tr'); tr.dataset.id=item.id; if(item.id===state.selectedId)tr.classList.add('selected');
+    const tr=document.createElement('tr'); tr.dataset.id=item.id; if(item.id===state.selectedId)tr.classList.add('selected'); if(priceIssues(item).length)tr.classList.add('price-error-row');
     tr.innerHTML=`
       <td class="select-cell"><input type="checkbox" data-row-select ${item.bulkSelected?'checked':''}></td>
       <td class="small-preview">${makeSvg(item)}</td>
       <td class="name-cell"><input class="cell-input name-input" data-pos-field="name" value="${escapeHtml(item.name)}"><div class="file-meta">${escapeHtml(item.fileName||item.source)}</div></td>
       <td><input class="cell-input tiny" data-pos-field="qty" type="number" step="1" min="0" value="${item.qty}"></td>
-      <td><select class="cell-input material-select" data-pos-field="material">${optionHtml(mats, item.material)}</select></td>
+      <td><select class="cell-input material-select" data-pos-field="material">${materialOptionsHtml(item.material)}</select></td>
       <td><input class="cell-input tiny" data-pos-field="thickness" type="number" step="0.1" min="0" value="${item.thickness}"></td>
       <td class="nowrap">${fmtNumber(g.width,1)}×${fmtNumber(g.height,1)}</td>
       <td><input type="checkbox" data-pos-field="cut" ${item.ops.cut?'checked':''}></td>
@@ -351,7 +404,7 @@ function renderTable(){
       <td><input class="cell-input service-input" data-pos-field="serviceText" placeholder="текст" value="${escapeHtml(item.serviceText||'')}"></td>
       <td><input class="cell-input note-input" data-pos-field="productionNote" placeholder="примечание" value="${escapeHtml(item.productionNote||'')}"></td>
       <td><span class="money">${fmtMoney(c.sale)}</span></td>
-      <td><span class="status-${st}" title="${escapeHtml((item.warnings||[]).join('\n'))}">${txt}</span></td>`;
+      <td><span class="status-${st}" title="${escapeHtml([...priceIssues(item), ...(item.warnings||[])].join('\n'))}">${txt}</span></td>`;
     tr.addEventListener('click',(e)=>{ if(e.target.closest('input,select,textarea,button')) return; state.selectedId=item.id; renderAll(); });
     els.itemsBody.appendChild(tr);
   }
@@ -498,7 +551,7 @@ function renderEditor(){
   const recalc=$('btnRecalcDxf'); if(recalc) recalc.addEventListener('click',()=>{ item.geometryOverridden=false; refreshDxfGeometry(item); renderAll(); autosaveProject(); });
   $('btnDeleteItem').addEventListener('click',()=>{ if(!confirm('Удалить позицию?'))return; state.items=state.items.filter(x=>x.id!==item.id); state.selectedId=state.items[0]?.id||null; renderAll(); autosaveProject(); });
 }
-function renderLog(){ const item=selectedItem(); if(!item){ els.logBox.textContent='Нет данных.'; return; } const warnings=item.warnings||[]; if(!warnings.length){ els.logBox.innerHTML='<div class="okline">Ошибок и замечаний нет.</div>'; return; } els.logBox.innerHTML=warnings.map(w=>`<div class="warnline">${escapeHtml(w)}</div>`).join(''); }
+function renderLog(){ const item=selectedItem(); if(!item){ els.logBox.textContent='Нет данных.'; return; } const warnings=[...priceIssues(item), ...(item.warnings||[])]; if(!warnings.length){ els.logBox.innerHTML='<div class="okline">Ошибок и замечаний нет.</div>'; return; } els.logBox.innerHTML=warnings.map(w=>`<div class="warnline">${escapeHtml(w)}</div>`).join(''); }
 function renderServices(){ if(!state.services.length){ els.servicesBody.innerHTML='<tr class="empty-row"><td colspan="4">Нет дополнительных строк.</td></tr>'; return; } els.servicesBody.innerHTML=''; for(const svc of state.services){ const tr=document.createElement('tr'); tr.innerHTML=`<td><input data-svc="name" value="${escapeHtml(svc.name)}"></td><td><input data-svc="cost" type="number" step="1" value="${num(svc.cost,0)}"></td><td><input data-svc="sale" type="number" step="1" value="${num(svc.sale,0)}"></td><td><button class="danger small">×</button></td>`; tr.querySelectorAll('[data-svc]').forEach(input=>input.addEventListener('input',()=>{ const k=input.dataset.svc; svc[k]=input.type==='number'?num(input.value,0):input.value; renderSummary(); autosaveProject(); })); tr.querySelector('button').addEventListener('click',()=>{ state.services=state.services.filter(x=>x.id!==svc.id); renderAll(); autosaveProject(); }); els.servicesBody.appendChild(tr); } }
 
 function renderPriceEditors(){ renderMaterialSelects(); syncPaintInputsFromPrices(); renderMetalPriceEditor(); renderCutPriceEditor(); renderBendPriceEditor(); }
@@ -550,7 +603,7 @@ function orderCostInput(name, label, value, type='number'){
 function renderCalcDetails(){
   const t=calcTotals();
   const oc=calcOrderCost();
-  const rows=state.items.map((item,i)=>{ const c=calcItem(item); return `<tr data-id="${item.id}">
+  const rows=state.items.map((item,i)=>{ const c=calcItem(item); const issues=priceIssues(item); return `<tr data-id="${item.id}" class="${issues.length?'price-error-row':''}">
     <td>${i+1}</td><td class="detail-name">${escapeHtml(item.name)}</td><td>${fmtNumber(c.weightTotal,2)}</td>
     <td><input class="calc-input" data-calc-field="metalFactor" type="number" step="0.01" value="${num(c.metalFactor,1)}"></td><td>${fmtMoney(c.metalSale)}</td>
     <td><input class="calc-input" data-calc-field="cutFactor" type="number" step="0.01" value="${num(c.cutFactor,1)}"></td><td>${fmtMoney(c.cutSale)}</td>
@@ -574,6 +627,7 @@ function renderCalcDetails(){
           ${orderCostInput('priceKg','Цена металла, ₽/кг',oc.priceKg)}
           ${orderCostInput('extraCost','Себ. доп., ₽',oc.extraCost)}
         </div>
+        ${oc.priceIssue ? `<div class="warnline">${escapeHtml(oc.priceIssue)}</div>` : ''}
         <div class="cost-result-row"><span>Вес металла</span><b>${fmtNumber(oc.metalKg,2)} кг</b></div>
         <div class="cost-result-row"><span>Себ. металл</span><b>${fmtMoney(oc.metalCost)}</b></div>
         <div class="cost-result-row"><span>Себ. доп.</span><b>${fmtMoney(oc.extraCost)}</b></div>
@@ -581,13 +635,13 @@ function renderCalcDetails(){
       <section class="totals-box calc-totals-box">
         <div><span>Итого без НДС</span><strong>${fmtMoney(t.saleNoVat)}</strong></div>
         <div><span>НДС</span><strong>${fmtMoney(t.vat)}</strong></div>
-        <div><span>Себестоимость</span><strong>${fmtMoney(t.cost)}</strong></div>
-        <div><span>Маржа</span><strong>${fmtMoney(t.margin)} / ${fmtNumber(t.marginPct,1)}%</strong></div>
+        <div><span>Себестоимость</span><strong>${t.costKnown ? fmtMoney(t.cost) : 'не заполнена'}</strong></div>
+        <div><span>Маржа</span><strong>${t.costKnown ? `${fmtMoney(t.margin)} / ${fmtNumber(t.marginPct,1)}%` : '— себестоимость не заполнена'}</strong></div>
         <div class="grand"><span>Итого с НДС</span><strong>${fmtMoney(t.saleWithVat)}</strong></div>
       </section>
     </div>`;
   els.calcDetails.querySelectorAll('[data-calc-field]').forEach(input=>input.addEventListener('change',()=>{ const item=state.items.find(x=>x.id===num(input.closest('tr').dataset.id)); if(!item)return; applyCalcField(item,input.dataset.calcField,input.value); renderAll(); autosaveProject(); }));
-  els.calcDetails.querySelectorAll('[data-order-cost]').forEach(input=>input.addEventListener('input',()=>{ const k=input.dataset.orderCost; state.orderCost[k]=input.type==='number'?num(input.value,0):input.value; renderAll(); autosaveProject(); }));
+  els.calcDetails.querySelectorAll('[data-order-cost]').forEach(input=>input.addEventListener('input',()=>{ const k=input.dataset.orderCost; state.orderCost[k]=input.type==='number'?num(input.value,0):input.value; if(k==='material'||k==='thicknessMm'){ const rec=materialRecord(state.orderCost.material); const rate=rec&&hasExactPrice(rec.prices,state.orderCost.thicknessMm)?exactPrice(rec.prices,state.orderCost.thicknessMm,0):0; if(rate>0) state.orderCost.priceKg=rate; } renderAll(); autosaveProject(); }));
   installFillHandles(els.calcDetails);
 }
 function renderLayouts(){
@@ -606,6 +660,28 @@ function copyQuote(){ const t=calcTotals(), s=getSettings(); const lines=[]; lin
 function downloadText(filename, content, type){ const blob=new Blob([content],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 async function importPrices(file){ const data=JSON.parse(await file.text()); if(!data.materials||!data.cut||!data.bend) throw new Error('Неверный файл цен'); prices=data; savePrices(); syncPaintInputsFromPrices(); renderAll(); }
 function exportPrices(){ syncPricesFromPaintInputs(); savePrices(); downloadText(`prices_${dateStamp()}.json`, JSON.stringify(prices,null,2), 'application/json'); }
+
+
+function printSection(section){
+  const targetView = section === 'production' ? 'production' : 'quote';
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.toggle('active', b.dataset.view===targetView));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id===`view-${targetView}`));
+  document.body.dataset.print = targetView;
+  setTimeout(()=>window.print(), 50);
+  const cleanup=()=>{ delete document.body.dataset.print; window.removeEventListener('afterprint', cleanup); };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(cleanup, 1500);
+}
+function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=()=>reject(reader.error||new Error('Не удалось прочитать файл')); reader.readAsDataURL(file); }); }
+async function addLayoutFiles(files){
+  const list=[...files].filter(f=>/^image\/(png|jpeg)$/.test(f.type)||/\.(png|jpe?g)$/i.test(f.name));
+  if(!list.length) throw new Error('Выбери JPEG или PNG раскладку. LXDS в этой версии добавляется через отдельный просмотрщик/сервер.');
+  for(const file of list){
+    const imageData=await fileToDataUrl(file);
+    state.layouts.push({ id:state.nextLayoutId++, fileName:file.name, imageData, material:getSettings().defaultMaterial, thickness:getSettings().defaultThickness, sheetSize:'', sheetCount:1, usage:'', fill:'', comment:'' });
+  }
+  renderAll(); autosaveProject();
+}
 
 function bindEvents(){ els.btnSelectFiles.addEventListener('click',()=>els.fileInput.click()); els.btnSelectFolder.addEventListener('click',()=>els.folderInput.click()); els.fileInput.addEventListener('change',e=>handleFiles(e.target.files)); els.folderInput.addEventListener('change',e=>handleFiles(e.target.files)); els.dropzone.addEventListener('dragover',e=>{e.preventDefault();els.dropzone.classList.add('dragover');}); els.dropzone.addEventListener('dragleave',()=>els.dropzone.classList.remove('dragover')); els.dropzone.addEventListener('drop',e=>{e.preventDefault();els.dropzone.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
   els.btnAddManual.addEventListener('click',addManualItem); els.btnAddService.addEventListener('click',addService); els.btnMergeDuplicates.addEventListener('click',mergeDuplicates); els.btnSaveProject.addEventListener('click',saveProject); els.btnLoadProject.addEventListener('click',()=>els.projectFileInput.click()); els.projectFileInput.addEventListener('change',e=>{ if(e.target.files[0])loadProject(e.target.files[0]).catch(err=>alert(err.message)); }); els.btnExportCsv.addEventListener('click',exportCsv); els.btnCopyQuote.addEventListener('click',copyQuote); els.btnClear.addEventListener('click',()=>{ if(!confirm('Очистить расчет?'))return; state.items=[]; state.services=[]; state.layouts=[]; state.orderCost={material:'Ст3',widthMm:0,lengthMm:0,thicknessMm:3,sheets:1,priceKg:67,extraCost:0}; state.selectedId=null; renderAll(); autosaveProject(); });

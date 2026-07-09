@@ -11,14 +11,14 @@
     <div>
       <div class="eyebrow">Парк Металл · current site</div>
       <h1>DXF калькулятор заказа</h1>
-      <p>Версия на базе v0.5: таблицы, протяжка ячеек и себестоимость заказа.</p>
+      <p>Версия v0.8: стабильные расчеты, точные цены по прайсу и себестоимость заказа.</p>
     </div>
     <div class="top-actions">
-      <button id="btnAddManual" class="secondary">+ Ручная позиция</button>
-      <button id="btnMergeDuplicates" class="secondary" disabled>Объединить дубли</button>
+      <button id="btnAddManual" class="secondary top-hidden">+ Ручная позиция</button>
+      <button id="btnMergeDuplicates" class="secondary top-hidden" disabled>Объединить дубли</button>
       <button id="btnSaveProject" class="secondary" disabled>Сохранить проект</button>
       <button id="btnLoadProject" class="secondary">Загрузить проект</button>
-      <button id="btnExportCsv" class="secondary" disabled>CSV</button>
+      <button id="btnExportCsv" class="secondary top-hidden" disabled>CSV</button>
       <button id="btnCopyQuote" class="primary" disabled>Скопировать КП</button>
       <button id="btnClear" class="danger" disabled>Очистить</button>
       <input id="projectFileInput" type="file" accept=".json,application/json" hidden>
@@ -115,7 +115,7 @@
           <table id="itemsTable" class="positions-table">
             <thead>
               <tr>
-                <th>✓</th><th>Превью</th><th>Деталь</th><th>Кол-во</th><th>Мат.</th><th>t</th><th>Габарит</th><th>Рез</th><th>Гибы</th><th>Дл. гиба</th><th>Полим.</th><th>RAL</th><th>Текстура</th><th>Сварка ₽/шт</th><th>Доп.</th><th>Прим.</th><th>Итого</th><th>Статус</th>
+                <th>✓</th><th>Превью</th><th>Деталь</th><th>Кол-во</th><th>Мат.</th><th>t</th><th>Габарит</th><th>Рез</th><th>Гибы</th><th>Дл. гиба</th><th>Полим.</th><th>RAL</th><th>Текстура</th><th>Сварка ₽/шт</th><th>Доп. прим.</th><th>Прим.</th><th>Итого</th><th>Статус</th>
               </tr>
             </thead>
             <tbody id="itemsBody"><tr class="empty-row"><td colspan="18">Файлы пока не загружены.</td></tr></tbody>
@@ -156,7 +156,7 @@
 
     <section class="view" id="view-calc">
       <section class="panel table-panel">
-        <div class="panel-title"><h2>Расчет по позициям</h2><span>Коэффициенты и фактическая себестоимость редактируются здесь. Итоги идут под колонками.</span></div>
+        <div class="panel-title"><h2>Расчет по позициям</h2><span>Коэффициенты редактируются здесь. Себестоимость вводится на весь заказ: металл + доп. расходы.</span></div>
         <div id="calcDetails" class="calc-details"></div>
       </section>
     </section>
@@ -291,7 +291,7 @@
   </main>
 
   <footer class="no-print">
-    <span>v0.7 current site</span>
+    <span>v0.8 current site</span>
     <span>Локальная работа: файлы не отправляются в интернет.</span>
   </footer>
 
