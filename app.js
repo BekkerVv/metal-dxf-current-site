@@ -1,18 +1,15 @@
 'use strict';
 
-const VERSION = '1.4';
-const STORAGE_KEY = 'pm_dxf_calc_current_site_v14_settings';
-const PRICE_KEY = 'pm_dxf_calc_current_site_v14_prices';
-const PROJECT_KEY = 'pm_dxf_calc_current_site_v14_autosave';
+const VERSION = '1.5';
+const STORAGE_KEY = 'pm_dxf_calc_current_site_v13_settings';
+const PRICE_KEY = 'pm_dxf_calc_current_site_v13_prices';
+const PROJECT_KEY = 'pm_dxf_calc_current_site_v13_autosave';
 
-const state = { items: [], services: [], layouts: [], orderCosts: [{ id: 1, material: 'гк ст3', widthMm: 1250, lengthMm: 2500, thicknessMm: 3, sheets: 0, priceKg: 63.2, note: '' }], orderCostExtra: 0, orderCost: { material: 'гк ст3', widthMm: 1250, lengthMm: 2500, thicknessMm: 3, sheets: 0, priceKg: 63.2, extraCost: 0 }, selectedId: null, nextId: 1, nextServiceId: 1, nextLayoutId: 1, nextCostId: 2, projectNotice: '' };
+const state = { items: [], services: [], layouts: [], orderCosts: [{ id: 1, material: 'гк ст3', widthMm: 1250, lengthMm: 2500, thicknessMm: 3, sheets: 0, priceKg: 63.2, note: '' }], orderCostExtra: 0, orderCost: { material: 'гк ст3', widthMm: 1250, lengthMm: 2500, thicknessMm: 3, sheets: 0, priceKg: 63.2, extraCost: 0 }, selectedId: null, nextId: 1, nextServiceId: 1, nextLayoutId: 1, nextCostId: 2, projectNotice: '', localProject: { server: false, root: '', relPath: '', folderRel: '', fileName: '', recent: [] } };
 let fillDrag = null;
 let positionSort = { field: '', dir: 'asc' };
 let positionFilters = {};
 let lastFocusedCell = null;
-let pendingAiActions = [];
-let aiMessages = [];
-let aiBusy = false;
 
 const DEFAULT_PRICES = {
   materials: [
@@ -53,7 +50,7 @@ const els = {
   fileInput: $('fileInput'), folderInput: $('folderInput'), projectFileInput: $('projectFileInput'), priceFileInput: $('priceFileInput'),
   dropzone: $('dropzone'), btnSelectFiles: $('btnSelectFiles'), btnSelectFolder: $('btnSelectFolder'),
   btnAddManual: $('btnAddManual'), btnAddManualPositions: $('btnAddManualPositions'), btnMergeDuplicates: $('btnMergeDuplicates'), btnSaveProject: $('btnSaveProject'),
-  btnLoadProject: $('btnLoadProject'), btnExportCsv: $('btnExportCsv'), btnCopyQuote: $('btnCopyQuote'), btnClear: $('btnClear'),
+  btnLoadProject: $('btnLoadProject'), btnSaveProjectAs: $('btnSaveProjectAs'), btnExportCsv: $('btnExportCsv'), btnCopyQuote: $('btnCopyQuote'), btnClear: $('btnClear'),
   btnAddService: $('btnAddService'), btnResetPrices: $('btnResetPrices'), btnExportPrices: $('btnExportPrices'), btnImportPrices: $('btnImportPrices'),
   btnAddMaterial: $('btnAddMaterial'), btnAddSheetPrice: $('btnAddSheetPrice'), btnAddCutThickness: $('btnAddCutThickness'), btnAddBendThickness: $('btnAddBendThickness'), btnCheckOrder: $('btnCheckOrder'),
   metalPriceEditor: $('metalPriceEditor'), sheetPriceEditor: $('sheetPriceEditor'), cutPriceEditor: $('cutPriceEditor'), bendPriceEditor: $('bendPriceEditor'),
@@ -69,9 +66,10 @@ const els = {
   productionBody: $('productionBody'), productionTitle: $('productionTitle'), productionMeta: $('productionMeta'),
   btnPrintQuote: $('btnPrintQuote'), btnPrintProduction: $('btnPrintProduction'), layoutFileInput: $('layoutFileInput'), btnAddLayout: $('btnAddLayout'), layoutsBody: $('layoutsBody'), calcDetails: $('calcDetails'),
   bulkField: $('bulkField'), bulkValue: $('bulkValue'), btnBulkApply: $('btnBulkApply'), btnBulkDown: $('btnBulkDown'), btnClearFilters: $('btnClearFilters'),
-  aiPrompt: $('aiPrompt'), btnAiSend: $('btnAiSend'), btnAiApply: $('btnAiApply'), btnAiClear: $('btnAiClear'), aiChat: $('aiChat'), aiActions: $('aiActions'), aiStatus: $('aiStatus'),
+  orderQuickInput: $('orderQuickInput'), btnParseOrder: $('btnParseOrder'), internalComment: $('internalComment'), localStatus: $('localStatus'),
+  saveModal: $('saveModal'), saveFolderName: $('saveFolderName'), saveFolderList: $('saveFolderList'), saveModalInfo: $('saveModalInfo'), btnConfirmSaveAs: $('btnConfirmSaveAs'), btnCancelSaveAs: $('btnCancelSaveAs'),
 };
-const SETTINGS_KEYS = ['orderNo','clientName','defaultMaterial','defaultThickness','vatRate','pricesIncludeVat','metalFactor','cutFactor','piercePrice','minCut','bendFactor','paintFactor','addThicknessToBlank','ignoreLayers','leadTime','paymentTerms','deliveryTerms','clientComment'];
+const SETTINGS_KEYS = ['orderNo','clientName','defaultMaterial','defaultThickness','vatRate','pricesIncludeVat','metalFactor','cutFactor','piercePrice','minCut','bendFactor','paintFactor','addThicknessToBlank','ignoreLayers','leadTime','paymentTerms','deliveryTerms','clientComment','internalComment'];
 
 function clone(obj) { return JSON.parse(JSON.stringify(obj)); }
 function num(v, fallback = 0) { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : fallback; }
@@ -263,7 +261,7 @@ function getSettings() {
     paintFactor: num(els.paintFactor.value, 1), addThicknessToBlank: els.addThicknessToBlank.checked, ignoreLayers: els.ignoreLayers.value,
     paintPriceM2: num(els.paintPriceM2.value, 0), paintCostM2: num(els.paintCostM2.value, 0), powderConsumption: num(els.powderConsumption.value, 0.15),
     powderPrice: num(els.powderPrice.value, 0), minPaint: els.minPaint ? num(els.minPaint.value, 0) : 0,
-    leadTime: els.leadTime?.value?.trim() || '', paymentTerms: els.paymentTerms?.value?.trim() || '', deliveryTerms: els.deliveryTerms?.value?.trim() || '', clientComment: els.clientComment?.value?.trim() || '',
+    leadTime: els.leadTime?.value?.trim() || '', paymentTerms: els.paymentTerms?.value?.trim() || '', deliveryTerms: els.deliveryTerms?.value?.trim() || '', clientComment: els.clientComment?.value?.trim() || '', internalComment: els.internalComment?.value?.trim() || '',
   };
 }
 function saleToNoVat(amount, s) { return s.pricesIncludeVat ? amount / (1 + s.vatRate) : amount; }
@@ -502,7 +500,7 @@ async function handleFiles(files){ const list=[...files].filter(f=>f.name.toLowe
 function detectDuplicates(){ for(const item of state.items)item.duplicateKey=''; const map=new Map(); for(const item of state.items){ const g=getGeometry(item); const key=`${round(g.width,1)}x${round(g.height,1)}|${round(g.cutLengthMm,1)}|${round(g.pierces,0)}|${item.thickness}|${item.material}`; item.duplicateKey=key; if(!map.has(key))map.set(key,[]); map.get(key).push(item); } for(const group of map.values()){ if(group.length>1){ const names=group.map(g=>g.name).join(', '); for(const item of group){ const msg=`Похожа на другие детали: ${names}. Можно объединить количество, если геометрия совпадает.`; if(!item.warnings.includes(msg))item.warnings.push(msg); } } } }
 function mergeDuplicates(){ detectDuplicates(); const groups=new Map(); for(const item of state.items){ if(!groups.has(item.duplicateKey))groups.set(item.duplicateKey,[]); groups.get(item.duplicateKey).push(item); } const merged=[]; let mergedCount=0; for(const group of groups.values()){ const first=group[0]; if(group.length>1){ first.qty=group.reduce((a,x)=>a+num(x.qty,0),0); first.name=`${first.name} / объединено ${group.length} поз.`; first.note=`${first.note||''}\nОбъединено: ${group.map(x=>x.fileName||x.name).join('; ')}`.trim(); first.warnings=first.warnings.filter(w=>!w.startsWith('Похожа на другие детали')); mergedCount+=group.length-1; } merged.push(first); } state.items=merged; if(mergedCount)alert(`Объединено дублей: ${mergedCount}`); renderAll(); autosaveProject(); }
 
-function renderAll(){ renderMaterialSelects(); renderPriceEditors(); renderTable(); renderGeometryEditor(); renderSummary(); renderLog(); renderServices(); renderQuote(); renderProduction(); renderCalcDetails(); renderLayouts(); renderAiPanel(); const has=state.items.length>0; els.btnExportCsv.disabled=!has; els.btnSaveProject.disabled=!has&&!state.services.length&&!state.layouts.length; els.btnClear.disabled=!has&&!state.services.length&&!state.layouts.length; els.btnCopyQuote.disabled=!has&&!state.services.length; els.btnMergeDuplicates.disabled=state.items.length<2; }
+function renderAll(){ renderMaterialSelects(); renderPriceEditors(); renderTable(); renderGeometryEditor(); renderSummary(); renderLog(); renderServices(); renderQuote(); renderProduction(); renderCalcDetails(); renderLayouts(); const has=state.items.length>0; const hasProjectContent=has||state.services.length||state.layouts.length||String(els.orderNo?.value||'').trim()||String(els.clientName?.value||'').trim(); els.btnExportCsv.disabled=!has; els.btnSaveProject.disabled=!hasProjectContent; if(els.btnSaveProjectAs) els.btnSaveProjectAs.disabled=!hasProjectContent; els.btnClear.disabled=!hasProjectContent; els.btnCopyQuote.disabled=!has&&!state.services.length; els.btnMergeDuplicates.disabled=state.items.length<2; }
 function renderSummary(){ const t=calcTotals(); els.sumFiles.textContent=state.items.length; els.sumQty.textContent=fmtNumber(t.qty,0); els.sumCut.textContent=`${fmtNumber(t.cut,2)} м`; els.sumWeight.textContent=`${fmtNumber(t.weight,1)} кг`; els.sumCost.textContent=t.costKnown?fmtMoney(t.cost):'не заполнено'; els.sumTotal.textContent=fmtMoney(t.saleWithVat); els.sumMargin.textContent=t.costKnown?`${fmtMoney(t.margin)} / ${fmtNumber(t.marginPct,1)}%`:'—'; }
 function validationIssues(item){
   const issues=[];
@@ -1117,9 +1115,100 @@ function priceDbMeta(){ return { siteVersion: VERSION, updated: '10.06.2026', no
 function makeProjectData(includeImages=true){
   ensureCostRows();
   const layouts=includeImages?state.layouts:state.layouts.map(l=>({...l, imageData:'', autosaveImageSkipped:true}));
-  return { version:VERSION, savedAt:new Date().toISOString(), settings:getSettings(), priceMeta: priceDbMeta(), orderCosts: state.orderCosts, orderCostExtra: state.orderCostExtra, items:state.items.map(item=>({...item, savedNoDxf:item.source==='dxf', previewSvg:makeSvg(item), rawEntities:null, entities:null, analysis:null})), services:state.services, layouts };
+  return { version:VERSION, savedAt:new Date().toISOString(), settings:getSettings(), priceMeta: priceDbMeta(), localProject: { relPath: state.localProject?.relPath || '', fileName: state.localProject?.fileName || '' }, orderCosts: state.orderCosts, orderCostExtra: state.orderCostExtra, items:state.items.map(item=>({...item, savedNoDxf:item.source==='dxf', previewSvg:makeSvg(item), rawEntities:null, entities:null, analysis:null})), services:state.services, layouts };
 }
-function saveProject(){ downloadText(`project_${dateStamp()}.json`, JSON.stringify(makeProjectData(), null, 2), 'application/json'); }
+function defaultOrderBaseName(){
+  const s=getSettings();
+  const raw=[s.orderNo, currentOrderDateText(), s.clientName].filter(Boolean).join('_') || `project_${dateStamp()}`;
+  return sanitizeFileName(raw).replace(/_+/g,'_').replace(/^_+|_+$/g,'');
+}
+function currentOrderDateText(){
+  const m=(els.orderQuickInput?.value||'').match(/\d{2}\.\d{2}\.\d{4}/);
+  if(m) return m[0];
+  return new Date().toLocaleDateString('ru-RU');
+}
+function sanitizeFileName(name){ return String(name||'').trim().replace(/[\\/:*?"<>|]/g,'_').replace(/\s+/g,' ').slice(0,140); }
+function parseOrderString(text){
+  const raw=String(text||'').trim();
+  if(!raw) throw new Error('Вставь строку заказа. Например: 7174_07.07.2026_Бетомас');
+  const parts=raw.split('_').map(x=>x.trim()).filter(Boolean);
+  let orderNo='', date='', client='', comment='';
+  if(parts.length>=3 && /^\d+$/.test(parts[0]) && /^\d{2}\.\d{2}\.\d{4}$/.test(parts[1])){
+    orderNo=parts[0]; date=parts[1]; client=parts[2]; comment=parts.slice(3).join(' ');
+  } else {
+    const m=raw.match(/^(\d+)\D+(\d{2}\.\d{2}\.\d{4})\D+(.+)$/);
+    if(!m) throw new Error('Не понял формат. Нужен: 7174_07.07.2026_Бетомас');
+    orderNo=m[1]; date=m[2]; client=m[3].trim();
+  }
+  return { orderNo, date, client, comment, folderName: sanitizeFileName(`${orderNo}_${date}_${client}`) };
+}
+function applyOrderString(){
+  try{
+    const r=parseOrderString(els.orderQuickInput.value);
+    els.orderNo.value=r.orderNo;
+    els.clientName.value=r.client;
+    if(els.internalComment && r.comment) els.internalComment.value=r.comment;
+    saveSettings();
+    state.localProject.folderRel=r.folderName;
+    if(els.saveFolderName) els.saveFolderName.value=r.folderName;
+    renderAll(); autosaveProject();
+    alert(`Заполнено: заказ ${r.orderNo}, дата ${r.date}, клиент ${r.client}`);
+  } catch(e){ alert(e.message||e); }
+}
+function setLocalStatus(text){ if(els.localStatus) els.localStatus.textContent=text; }
+async function apiGet(url){ const r=await fetch(url); const t=await r.text(); if(!r.ok) throw new Error(t || `Ошибка ${r.status}`); return JSON.parse(t); }
+async function apiPost(url, data){ const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); const t=await r.text(); if(!r.ok) throw new Error(t || `Ошибка ${r.status}`); return JSON.parse(t); }
+async function checkLocalServer(){
+  try{
+    const info=await apiGet('/api/local/status');
+    state.localProject.server=true; state.localProject.root=info.root||''; state.localProject.recent=info.recent||[];
+    setLocalStatus(`Локальный сервер: ${info.root || 'включен'}`);
+    return true;
+  } catch(_){ state.localProject.server=false; setLocalStatus('Локальный сервер не запущен. Сохранение будет скачиванием JSON.'); return false; }
+}
+function openSaveModal(){
+  if(!els.saveModal) return;
+  const folder=state.localProject.folderRel || defaultOrderBaseName();
+  els.saveFolderName.value=folder;
+  els.saveModal.classList.remove('hidden');
+  els.saveModalInfo.textContent=state.localProject.root ? `Корневая папка: ${state.localProject.root}` : 'Выбери/введи папку заказа';
+  refreshSaveFolderList().catch(()=>{});
+}
+function closeSaveModal(){ els.saveModal?.classList.add('hidden'); }
+async function refreshSaveFolderList(){
+  if(!state.localProject.server || !els.saveFolderList) return;
+  const data=await apiGet('/api/local/list?rel=');
+  const recent=(state.localProject.recent||[]).slice(0,8);
+  const recentHtml=recent.length?`<div class="folder-list-title">Недавние</div>${recent.map(x=>`<button type="button" data-folder="${escapeHtml(x.folderRel||'')}">${escapeHtml(x.orderName||x.folderRel||x.fileName||'проект')}</button>`).join('')}`:'';
+  const folders=(data.folders||[]).slice(0,80);
+  els.saveFolderList.innerHTML=recentHtml+`<div class="folder-list-title">Папки заказов</div>`+folders.map(f=>`<button type="button" data-folder="${escapeHtml(f.rel)}">${escapeHtml(f.name)}</button>`).join('');
+  els.saveFolderList.querySelectorAll('[data-folder]').forEach(btn=>btn.addEventListener('click',()=>{ els.saveFolderName.value=btn.dataset.folder || btn.textContent.trim(); }));
+}
+async function saveProjectToServer(saveAs=false){
+  if(!state.localProject.server) await checkLocalServer();
+  if(!state.localProject.server){ downloadText(`${defaultOrderBaseName()}.project.json`, JSON.stringify(makeProjectData(), null, 2), 'application/json'); return; }
+  if(!saveAs && state.localProject.relPath){
+    const result=await apiPost('/api/local/save-current',{ relPath:state.localProject.relPath, project:makeProjectData() });
+    setLocalStatus(`Сохранено: ${result.fullPath || result.relPath}`);
+    alert('Проект сохранен в папку заказа.');
+    return;
+  }
+  openSaveModal();
+}
+async function confirmSaveAs(){
+  try{
+    const folderRel=String(els.saveFolderName?.value||'').trim() || defaultOrderBaseName();
+    const orderName=defaultOrderBaseName();
+    const result=await apiPost('/api/local/save-as',{ folderRel, orderName, project:makeProjectData() });
+    state.localProject.relPath=result.relPath; state.localProject.folderRel=result.folderRel; state.localProject.fileName=result.fileName;
+    closeSaveModal();
+    await checkLocalServer();
+    setLocalStatus(`Сохранено: ${result.fullPath}`);
+    alert(`Сохранено в папку заказа:\n${result.fullPath}\n\nСоздан файл: Открыть заказ.bat`);
+  } catch(e){ alert(e.message||e); }
+}
+function saveProject(){ saveProjectToServer(false).catch(err=>{ console.error(err); alert(err.message||err); }); }
+function saveProjectAs(){ saveProjectToServer(true).catch(err=>{ console.error(err); alert(err.message||err); }); }
 function shouldIgnoreProjectPrices(data){
   if(!data || !data.prices) return false;
   return true;
@@ -1142,10 +1231,10 @@ function migrateOrderCosts(data){
   state.orderCost = { ...first, extraCost: state.orderCostExtra };
   ensureCostRows();
 }
-async function loadProject(file){
-  const data=JSON.parse(await file.text());
+function loadProjectData(data, extraNotice=''){
   const notices=[];
   if(String(data.version || '') !== VERSION) notices.push(`Проект сохранен в версии ${data.version || 'без версии'}, открыт в v${VERSION}.`);
+  if(extraNotice) notices.push(extraNotice);
   if(shouldIgnoreProjectPrices(data)) notices.push('База цен из проекта не загружена. Используется актуальная база сайта. При необходимости импортируй цены отдельно во вкладке «База цен».');
   if(data.settings){ for(const [k,v] of Object.entries(data.settings)){ if(els[k]){ let value=v; if(k==='vatRate'&&num(value,20)<=1)value=num(value,0.2)*100; if(k==='defaultMaterial') value=canonicalMaterialName(value); if(els[k].type==='checkbox')els[k].checked=Boolean(value); else els[k].value=value; } } if(els.minCut)els.minCut.value=0; saveSettings(); }
   state.nextId=1; state.nextServiceId=1; state.nextLayoutId=1; state.projectNotice=notices.join(' ');
@@ -1157,224 +1246,27 @@ async function loadProject(file){
   renderAll(); autosaveProject();
   if(state.projectNotice) setTimeout(()=>alert(state.projectNotice), 50);
 }
+async function loadProject(file){
+  const data=JSON.parse(await file.text());
+  loadProjectData(data);
+}
+async function loadServerProject(rel){
+  const data=await apiGet(`/api/local/project?rel=${encodeURIComponent(rel)}`);
+  state.localProject.relPath=rel;
+  state.localProject.fileName=rel.split(/[\\/]/).pop();
+  state.localProject.folderRel=rel.split(/[\\/]/).slice(0,-1).join('/');
+  loadProjectData(data, `Открыт проект из папки заказа: ${rel}`);
+  setLocalStatus(`Открыт: ${rel}`);
+}
+async function initLocalOpenFromUrl(){
+  await checkLocalServer();
+  const rel=new URLSearchParams(location.search).get('project');
+  if(rel && state.localProject.server){
+    try{ await loadServerProject(rel); }
+    catch(e){ alert(`Не удалось открыть проект из папки:\n${e.message||e}`); }
+  }
+}
 function exportCsv(){ const rows=[['Деталь','Кол-во','Материал','Толщина','Габарит X','Габарит Y','Рез м','Врезки','Вес кг','Металл','Резка','Гибка','Покраска','Итого продажа','Себестоимость']]; for(const item of state.items){ const c=calcItem(item), g=getGeometry(item); rows.push([item.name,c.qty,item.material,c.t,round(g.width,2),round(g.height,2),round(c.cutMTotal,3),c.piercesTotal,round(c.weightTotal,3),round(c.metalSale,2),round(c.cutSale,2),round(c.bendSale,2),round(c.paintSale,2),round(c.sale,2),round(c.cost,2)]); } const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n'); downloadText(`dxf_calc_${dateStamp()}.csv`, csv, 'text/csv;charset=utf-8'); }
-
-function aiProjectContext(){
-  const totals = calcTotals();
-  return {
-    version: VERSION,
-    order: getSettings(),
-    totals: {
-      positions: state.items.length,
-      qty: totals.qty,
-      cutM: totals.cut,
-      weightKg: totals.weight,
-      saleNoVat: totals.saleNoVat,
-      saleWithVat: totals.saleWithVat,
-      costKnown: totals.costKnown,
-      cost: totals.cost,
-      margin: totals.margin,
-      marginPct: totals.marginPct,
-    },
-    check: orderCheckReport(),
-    items: state.items.map((item, index) => {
-      const c = calcItem(item);
-      const g = getGeometry(item);
-      return {
-        index: index + 1,
-        id: item.id,
-        name: item.name,
-        qty: num(item.qty,0),
-        material: item.material,
-        thickness: num(item.thickness,0),
-        ops: item.ops,
-        bends: num(item.bends,0),
-        bendLengthMm: num(item.bendLengthMm,0),
-        paintLayers: num(item.paintLayers,0),
-        ral: item.ral || '',
-        texture: item.paintTexture || '',
-        weldPriceOne: num(item.weldPriceOne,0),
-        serviceText: item.serviceText || '',
-        productionNote: item.productionNote || '',
-        note: item.note || '',
-        geometry: { width: num(g.width,0), height: num(g.height,0), cutLengthMm: num(g.cutLengthMm,0), pierces: num(g.pierces,0), paintAreaM2One: num(item.paintAreaM2One,0) },
-        factors: { metal: num(item.metalFactor,0), cut: num(item.cutFactor,0), bend: num(item.bendFactor,0), paint: num(item.paintFactor,0) },
-        sale: c.sale,
-        status: itemStatus(item)[1],
-        issues: [...priceIssues(item), ...validationIssues(item), ...(item.warnings || [])].slice(0, 10),
-      };
-    }),
-    orderCosts: state.orderCosts.map(r => ({...r})),
-    extraCost: state.orderCostExtra,
-    services: state.services.map(svc => ({...svc})),
-    materialNames: materialNames(),
-  };
-}
-function renderAiPanel(){
-  if(!els.aiChat) return;
-  els.aiStatus.textContent = aiBusy ? 'ИИ думает...' : (pendingAiActions.length ? `Готово действий: ${pendingAiActions.length}` : 'Готов');
-  if(!aiMessages.length){
-    els.aiChat.innerHTML = '<div class="ai-empty">Напиши команду. Например: «поставь всем Ст3 3 мм», «всем RAL 9005», «проверь заказ», «добавь доставку 5000».</div>';
-  } else {
-    els.aiChat.innerHTML = aiMessages.map(m => `<div class="ai-msg ${m.role}"><b>${m.role==='user'?'Ты':'ИИ'}:</b><div>${escapeHtml(m.text).replace(/\n/g,'<br>')}</div></div>`).join('');
-    els.aiChat.scrollTop = els.aiChat.scrollHeight;
-  }
-  if(!pendingAiActions.length){
-    els.aiActions.innerHTML = '<div class="muted-line">Нет действий для применения.</div>';
-  } else {
-    els.aiActions.innerHTML = pendingAiActions.map((a,i)=>`<div class="ai-action"><b>${i+1}.</b> ${escapeHtml(describeAiAction(a))}</div>`).join('');
-  }
-  if(els.btnAiApply) els.btnAiApply.disabled = !pendingAiActions.length;
-  if(els.btnAiSend) els.btnAiSend.disabled = aiBusy;
-}
-function addAiMessage(role, text){ aiMessages.push({role, text: String(text || '')}); renderAiPanel(); }
-function describeAiAction(a){
-  if(!a || !a.type) return 'неизвестное действие';
-  if(a.type === 'set_items') return `изменить позиции (${describeAiFilter(a.filter)}): ${Object.entries(a.changes||{}).map(([k,v])=>`${k}=${v}`).join(', ')}`;
-  if(a.type === 'add_service') return `добавить доп. строку: ${a.name || 'Доп. услуга'} / продажа ${fmtMoney(num(a.sale,0))}`;
-  if(a.type === 'add_cost_row') return `добавить себестоимость металла: ${a.material || 'материал'} ${a.thicknessMm || ''} мм ${a.widthMm || ''}×${a.lengthMm || ''}, листов ${a.sheets || 0}`;
-  if(a.type === 'set_order_cost_extra') return `себ. доп. = ${fmtMoney(num(a.value,0))}`;
-  if(a.type === 'set_quote_terms') return 'изменить условия КП';
-  if(a.type === 'select_items') return `выбрать позиции (${describeAiFilter(a.filter)})`;
-  if(a.type === 'check_order') return 'проверить заказ';
-  return a.type;
-}
-function describeAiFilter(filter){
-  if(!filter || filter.scope === 'all') return 'все';
-  if(filter.scope === 'selected') return 'отмеченные';
-  if(filter.ids) return `id: ${filter.ids.join(',')}`;
-  if(filter.nameContains) return `имя содержит «${filter.nameContains}»`;
-  if(filter.thickness) return `толщина ${filter.thickness}`;
-  return 'по условию';
-}
-function aiTargets(filter){
-  let list = [...state.items];
-  if(!filter || filter.scope === 'all') return list;
-  if(filter.scope === 'selected') return list.filter(i => i.bulkSelected);
-  if(Array.isArray(filter.ids) && filter.ids.length) return list.filter(i => filter.ids.map(Number).includes(Number(i.id)) || filter.ids.map(Number).includes(state.items.indexOf(i)+1));
-  if(filter.nameContains) list = list.filter(i => normText(i.name).includes(normText(filter.nameContains)));
-  if(filter.material) list = list.filter(i => normText(i.material).includes(normText(filter.material)));
-  if(filter.thickness !== undefined && filter.thickness !== '') list = list.filter(i => Math.abs(num(i.thickness,0) - num(filter.thickness,0)) < 0.0001);
-  return list;
-}
-function normalizeAiActions(actions){
-  if(!Array.isArray(actions)) return [];
-  return actions.filter(a => a && typeof a === 'object' && a.type).map(a => ({...a, filter: a.filter || {scope:'all'}, changes: a.changes || {}}));
-}
-function applyAiAction(a){
-  if(a.type === 'set_items'){
-    const targets = aiTargets(a.filter);
-    const changes = a.changes || {};
-    for(const item of targets){
-      for(const [field, value] of Object.entries(changes)){
-        if(['qty','thickness','bends','bendLengthMm','paintLayers','weldPriceOne','metalFactor','cutFactor','bendFactor','paintFactor'].includes(field)) item[field] = num(value, 0);
-        else if(field === 'material') item.material = canonicalMaterialName(value);
-        else if(field === 'cut') item.ops.cut = Boolean(value);
-        else if(field === 'metal') item.ops.metal = Boolean(value);
-        else if(field === 'paint') item.paintLayers = value ? Math.max(1, num(item.paintLayers,1)) : 0;
-        else if(field === 'ral') item.ral = String(value || '').toUpperCase();
-        else if(field === 'paintTexture' || field === 'texture') item.paintTexture = String(value || '');
-        else if(field === 'serviceText') item.serviceText = String(value || '');
-        else if(field === 'productionNote') item.productionNote = String(value || '');
-        else if(field === 'note') item.note = String(value || '');
-      }
-      normalizeItem(item);
-    }
-    return `Изменено позиций: ${targets.length}`;
-  }
-  if(a.type === 'add_service'){
-    state.services.push({id:state.nextServiceId++, name:String(a.name || 'Доп. услуга'), cost:num(a.cost,0), sale:num(a.sale,0)});
-    return 'Доп. строка добавлена';
-  }
-  if(a.type === 'add_cost_row'){
-    const row = normalizeCostRow({ id: state.nextCostId++, material: a.material || 'гк ст3', widthMm:num(a.widthMm,0), lengthMm:num(a.lengthMm,0), thicknessMm:num(a.thicknessMm,0), sheets:num(a.sheets,0), priceKg:num(a.priceKg,0), note:a.note||'' });
-    state.orderCosts.push(row);
-    return 'Строка себестоимости добавлена';
-  }
-  if(a.type === 'set_order_cost_extra'){
-    state.orderCostExtra = num(a.value,0);
-    if(!state.orderCost) state.orderCost = {};
-    state.orderCost.extraCost = state.orderCostExtra;
-    return 'Себ. доп. обновлена';
-  }
-  if(a.type === 'set_quote_terms'){
-    const fields = { leadTime:'leadTime', paymentTerms:'paymentTerms', deliveryTerms:'deliveryTerms', clientComment:'clientComment' };
-    Object.entries(fields).forEach(([k, el]) => { if(a[k] !== undefined && els[el]) els[el].value = String(a[k] || ''); });
-    saveSettings();
-    return 'Условия КП обновлены';
-  }
-  if(a.type === 'select_items'){
-    state.items.forEach(i => i.bulkSelected = false);
-    aiTargets(a.filter).forEach(i => i.bulkSelected = true);
-    return 'Позиции отмечены';
-  }
-  if(a.type === 'check_order'){
-    const report = orderCheckReport();
-    addAiMessage('assistant', report);
-    return 'Проверка выполнена';
-  }
-  return `Действие ${a.type} пропущено`;
-}
-function applyPendingAiActions(){
-  const results = pendingAiActions.map(applyAiAction);
-  pendingAiActions = [];
-  renderAll();
-  autosaveProject();
-  addAiMessage('assistant', `Применено:\n- ${results.join('\n- ')}`);
-}
-function localAiParser(text){
-  const q = normText(text);
-  const actions = [];
-  let reply = '';
-  const filter = q.includes('выбран') || q.includes('отмеч') ? {scope:'selected'} : {scope:'all'};
-  if(q.includes('проверь') || q.includes('проверить')) return {reply: orderCheckReport(), actions: []};
-  let m = q.match(/(?:материал|поставь|сделай|всем)\s*(гк ст3|ст3|09г2с|08пс хк|08пс|оцинковка|оц|нерж(?:авейка)?|алюминий|алюм)/i);
-  if(m) actions.push({type:'set_items', filter, changes:{material:canonicalMaterialName(m[1])}});
-  m = q.match(/(?:толщина|t|на)\s*(\d+(?:[\.,]\d+)?)\s*мм|(?:всем|выбранным|поставь)\s*(\d+(?:[\.,]\d+)?)\s*мм/i);
-  if(m) actions.push({type:'set_items', filter, changes:{thickness:num(m[1]||m[2],0)}});
-  m = q.match(/ral\s*([0-9]{3,4})/i);
-  if(m) actions.push({type:'set_items', filter, changes:{ral:'RAL '+m[1], paintLayers: q.includes('2 сл') ? 2 : 1}});
-  m = q.match(/(?:полимерка|покраска)\s*(0|1|2)/i);
-  if(m) actions.push({type:'set_items', filter, changes:{paintLayers:num(m[1],0)}});
-  m = q.match(/(?:гибы|гибка)\s*(\d+)/i);
-  if(m) actions.push({type:'set_items', filter, changes:{bends:num(m[1],0)}});
-  m = q.match(/(?:длина гиба|гиб.*длина)\s*(\d+(?:[\.,]\d+)?)/i);
-  if(m) actions.push({type:'set_items', filter, changes:{bendLengthMm:num(m[1],0)}});
-  m = q.match(/(?:коэф(?:фициент)? резки|кр)\s*(\d+(?:[\.,]\d+)?)/i);
-  if(m) actions.push({type:'set_items', filter, changes:{cutFactor:num(m[1],0)}});
-  m = q.match(/(?:коэф(?:фициент)? металла|км)\s*(\d+(?:[\.,]\d+)?)/i);
-  if(m) actions.push({type:'set_items', filter, changes:{metalFactor:num(m[1],0)}});
-  m = q.match(/(?:доставка|упаковка|минималка|доп(?:\.\s*)?услуга)\D*(\d{2,})/i);
-  if(m) actions.push({type:'add_service', name: q.includes('достав')?'Доставка':(q.includes('упаков')?'Упаковка':'Доп. услуга'), sale:num(m[1],0), cost:0});
-  m = q.match(/(?:себ|себестоимость).*?(гк ст3|ст3|09г2с|08пс хк|08пс|оцинковка|оц|нерж(?:авейка)?|алюминий|алюм).*?(\d+(?:[\.,]\d+)?)\s*мм.*?(\d{3,4})\s*[xх×]\s*(\d{3,4}).*?(\d+(?:[\.,]\d+)?)/i);
-  if(m) actions.push({type:'add_cost_row', material:canonicalMaterialName(m[1]), thicknessMm:num(m[2],0), widthMm:num(m[3],0), lengthMm:num(m[4],0), sheets:num(m[5],0)});
-  if(actions.length) reply = 'Я понял команду. Проверь действия ниже и нажми «Применить». Это локальный разбор команды.';
-  else reply = 'Локально я понял только простые команды. Для полноценного ИИ запусти сайт через run_ai.bat и настрой OPENAI_API_KEY.';
-  return {reply, actions};
-}
-async function askAi(){
-  const text = (els.aiPrompt?.value || '').trim();
-  if(!text) return;
-  addAiMessage('user', text);
-  if(els.aiPrompt) els.aiPrompt.value = '';
-  aiBusy = true; renderAiPanel();
-  try{
-    let data;
-    try{
-      const res = await fetch('/api/ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message:text, project: aiProjectContext() }) });
-      if(!res.ok) throw new Error(await res.text());
-      data = await res.json();
-    } catch(apiErr){
-      data = localAiParser(text);
-      data.reply += `\n\nAPI недоступен: ${apiErr.message || apiErr}`;
-    }
-    pendingAiActions = normalizeAiActions(data.actions || []);
-    addAiMessage('assistant', data.reply || data.message || 'Готово.');
-  } catch(err){
-    addAiMessage('assistant', `Ошибка ИИ: ${err.message || err}`);
-  } finally { aiBusy = false; renderAiPanel(); }
-}
-
 function orderCheckReport(){
   const errors=[], warns=[];
   const t=calcTotals(), oc=calcOrderCost();
@@ -1452,16 +1344,15 @@ async function addLayoutFiles(files){
 }
 
 function bindEvents(){ els.btnSelectFiles.addEventListener('click',()=>els.fileInput.click()); els.btnSelectFolder.addEventListener('click',()=>els.folderInput.click()); els.fileInput.addEventListener('change',e=>handleFiles(e.target.files)); els.folderInput.addEventListener('change',e=>handleFiles(e.target.files)); els.dropzone.addEventListener('dragover',e=>{e.preventDefault();els.dropzone.classList.add('dragover');}); els.dropzone.addEventListener('dragleave',()=>els.dropzone.classList.remove('dragover')); els.dropzone.addEventListener('drop',e=>{e.preventDefault();els.dropzone.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
-  if(els.btnAddManual)els.btnAddManual.addEventListener('click',addManualItem); if(els.btnAddManualPositions)els.btnAddManualPositions.addEventListener('click',addManualItem); if(els.btnCheckOrder)els.btnCheckOrder.addEventListener('click',checkOrder); els.btnAddService.addEventListener('click',addService); els.btnMergeDuplicates.addEventListener('click',mergeDuplicates); els.btnSaveProject.addEventListener('click',saveProject); els.btnLoadProject.addEventListener('click',()=>els.projectFileInput.click()); els.projectFileInput.addEventListener('change',e=>{ if(e.target.files[0])loadProject(e.target.files[0]).catch(err=>alert(err.message)); }); els.btnExportCsv.addEventListener('click',exportCsv); els.btnCopyQuote.addEventListener('click',copyQuote); els.btnClear.addEventListener('click',()=>{ if(!confirm('Очистить расчет?'))return; state.items=[]; state.services=[]; state.layouts=[]; state.nextCostId=1; state.orderCosts=[defaultCostRow()]; state.orderCostExtra=0; state.orderCost={material:'гк ст3',widthMm:1250,lengthMm:2500,thicknessMm:3,sheets:0,priceKg:63.2,extraCost:0}; state.projectNotice=''; state.selectedId=null; renderAll(); autosaveProject(); });
+  if(els.btnAddManual)els.btnAddManual.addEventListener('click',addManualItem); if(els.btnAddManualPositions)els.btnAddManualPositions.addEventListener('click',addManualItem); if(els.btnCheckOrder)els.btnCheckOrder.addEventListener('click',checkOrder); els.btnAddService.addEventListener('click',addService); els.btnMergeDuplicates.addEventListener('click',mergeDuplicates); els.btnSaveProject.addEventListener('click',saveProject); if(els.btnSaveProjectAs) els.btnSaveProjectAs.addEventListener('click',saveProjectAs); els.btnLoadProject.addEventListener('click',()=>els.projectFileInput.click()); els.projectFileInput.addEventListener('change',e=>{ if(e.target.files[0])loadProject(e.target.files[0]).catch(err=>alert(err.message)); }); els.btnExportCsv.addEventListener('click',exportCsv); els.btnCopyQuote.addEventListener('click',copyQuote); els.btnClear.addEventListener('click',()=>{ if(!confirm('Очистить расчет?'))return; state.items=[]; state.services=[]; state.layouts=[]; state.nextCostId=1; state.orderCosts=[defaultCostRow()]; state.orderCostExtra=0; state.orderCost={material:'гк ст3',widthMm:1250,lengthMm:2500,thicknessMm:3,sheets:0,priceKg:63.2,extraCost:0}; state.projectNotice=''; state.selectedId=null; renderAll(); autosaveProject(); });
   els.btnResetPrices.addEventListener('click',()=>{ if(!confirm('Сбросить базу цен к значениям по умолчанию?'))return; prices=clone(DEFAULT_PRICES); savePrices(); syncPaintInputsFromPrices(); renderAll(); }); els.btnExportPrices.addEventListener('click',exportPrices); els.btnImportPrices.addEventListener('click',()=>els.priceFileInput.click()); els.priceFileInput.addEventListener('change',e=>{ if(e.target.files[0])importPrices(e.target.files[0]).catch(err=>alert(err.message)); }); els.btnAddMaterial.addEventListener('click',addMaterial); if(els.btnAddSheetPrice)els.btnAddSheetPrice.addEventListener('click',addSheetPrice); els.btnAddCutThickness.addEventListener('click',addCutThickness); els.btnAddBendThickness.addEventListener('click',addBendThickness);
   document.querySelectorAll('.nav-tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); btn.classList.add('active'); const view=$(`view-${btn.dataset.view}`); if(view)view.classList.add('active'); }));
   if(els.btnBulkApply)els.btnBulkApply.addEventListener('click',()=>applyBulk(false)); if(els.btnBulkDown)els.btnBulkDown.addEventListener('click',()=>applyBulk(true)); if(els.btnClearFilters)els.btnClearFilters.addEventListener('click',clearPositionFilters);
-  if(els.btnAiSend)els.btnAiSend.addEventListener('click',askAi); if(els.aiPrompt)els.aiPrompt.addEventListener('keydown',e=>{ if(e.ctrlKey && e.key === 'Enter') askAi(); }); if(els.btnAiApply)els.btnAiApply.addEventListener('click',applyPendingAiActions); if(els.btnAiClear)els.btnAiClear.addEventListener('click',()=>{ aiMessages=[]; pendingAiActions=[]; renderAiPanel(); });
   if(els.btnPrintQuote)els.btnPrintQuote.addEventListener('click',()=>printSection('quote')); if(els.btnPrintProduction)els.btnPrintProduction.addEventListener('click',()=>printSection('production'));
   document.addEventListener('paste', e=>{ if(e.defaultPrevented) return; const el=document.activeElement; if(el?.dataset?.posField || el?.dataset?.calcField){ setLastFocusedCell(el); handleGridPaste(e); } });
-  if(els.btnAddLayout)els.btnAddLayout.addEventListener('click',()=>els.layoutFileInput.click()); if(els.layoutFileInput)els.layoutFileInput.addEventListener('change',e=>{ if(e.target.files.length)addLayoutFiles(e.target.files).catch(err=>alert(err.message)); });
+  if(els.btnParseOrder) els.btnParseOrder.addEventListener('click',applyOrderString); if(els.orderQuickInput) els.orderQuickInput.addEventListener('keydown',e=>{ if(e.key==='Enter') applyOrderString(); }); if(els.btnConfirmSaveAs) els.btnConfirmSaveAs.addEventListener('click',confirmSaveAs); if(els.btnCancelSaveAs) els.btnCancelSaveAs.addEventListener('click',closeSaveModal); document.querySelectorAll('[data-close-save-modal]').forEach(b=>b.addEventListener('click',closeSaveModal)); if(els.saveModal) els.saveModal.addEventListener('click',e=>{ if(e.target===els.saveModal) closeSaveModal(); }); if(els.btnAddLayout)els.btnAddLayout.addEventListener('click',()=>els.layoutFileInput.click()); if(els.layoutFileInput)els.layoutFileInput.addEventListener('change',e=>{ if(e.target.files.length)addLayoutFiles(e.target.files).catch(err=>alert(err.message)); });
   document.querySelectorAll('.price-tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.price-tab').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.price-tab-content').forEach(p=>p.classList.remove('active')); btn.classList.add('active'); $(`tab-${btn.dataset.tab}`).classList.add('active'); }));
   [...SETTINGS_KEYS,'paintPriceM2','paintCostM2','powderConsumption','powderPrice'].forEach(key=>{ if(!els[key])return; const ev=els[key].type==='checkbox'?'change':'input'; els[key].addEventListener(ev,()=>{ syncPricesFromPaintInputs(); savePrices(); saveSettings(); if(['ignoreLayers','addThicknessToBlank'].includes(key))refreshAllDxfGeometry(); renderAll(); autosaveProject(); }); });
 }
-function init(){ loadPrices(); renderMaterialSelects(); syncPaintInputsFromPrices(); loadSettings(); if(els.minCut) els.minCut.value=0; bindEvents(); renderAll(); }
+function init(){ loadPrices(); renderMaterialSelects(); syncPaintInputsFromPrices(); loadSettings(); if(els.minCut) els.minCut.value=0; bindEvents(); renderAll(); initLocalOpenFromUrl(); }
 init();
